@@ -6,7 +6,6 @@ GTrade Data System — платформа управления данными в
 
 - `services/` — Go-микросервисы
 - `tools/` — Go CLI-утилиты
-- `frontend/` — заглушка под Angular
 - `docs/` — документация по архитектуре и сервисам
 
 ## Сервисы
@@ -94,7 +93,7 @@ make down
 - реальный reverse proxy / service client flow в gateway
 - интеграции с внешними API маркетплейсов
 - полноценная интеграция с Resend
-- frontend на Angular
+- frontend вынесен в отдельный репозиторий
 
 ## Подход к данным
 
