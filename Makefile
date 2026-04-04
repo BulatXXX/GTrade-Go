@@ -1,4 +1,4 @@
-.PHONY: up down logs build clean migrate-list
+.PHONY: up down logs build clean migrate-list auth-up auth-down auth-logs
 
 up:
 	docker compose -f deploy/docker-compose.yml --env-file deploy/.env up --build -d
@@ -8,6 +8,15 @@ down:
 
 logs:
 	docker compose -f deploy/docker-compose.yml --env-file deploy/.env logs -f
+
+auth-up:
+	docker compose -f deploy/docker-compose.auth.yml --env-file deploy/.env up --build -d
+
+auth-down:
+	docker compose -f deploy/docker-compose.auth.yml --env-file deploy/.env down -v
+
+auth-logs:
+	docker compose -f deploy/docker-compose.auth.yml --env-file deploy/.env logs -f
 
 build:
 	for d in services/* tools/catalog-importer; do \

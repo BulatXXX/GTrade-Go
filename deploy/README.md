@@ -5,6 +5,7 @@
 Файлы:
 
 - `docker-compose.yml` — локальная docker-compose схема
+- `docker-compose.auth.yml` — минимальная схема только для `postgres-auth` и `auth-service`
 - `.env.example` — шаблон переменных окружения для локального запуска
 
 Быстрый старт:
@@ -15,3 +16,11 @@ make up
 ```
 
 `Makefile` использует `deploy/docker-compose.yml` и читает переменные из `deploy/.env`.
+
+Минимальный запуск только auth:
+
+```bash
+cp deploy/.env.example deploy/.env
+make auth-up
+make auth-logs
+```
