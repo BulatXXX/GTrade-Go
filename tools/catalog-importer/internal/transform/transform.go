@@ -20,7 +20,7 @@ type Translation struct {
 }
 
 type Transformer interface {
-	Transform(raw []source.RawItem) ([]Item, error)
+	Transform(raw source.RawItem) (Item, error)
 }
 
 type NoopTransformer struct{}
@@ -29,27 +29,23 @@ func NewNoopTransformer() *NoopTransformer {
 	return &NoopTransformer{}
 }
 
-func (t *NoopTransformer) Transform(raw []source.RawItem) ([]Item, error) {
-	items := make([]Item, 0, len(raw))
-	for _, r := range raw {
-		translations := make([]Translation, 0, len(r.Translations))
-		for _, tr := range r.Translations {
-			translations = append(translations, Translation{
-				LanguageCode: tr.LanguageCode,
-				Name:         tr.Name,
-				Description:  tr.Description,
-			})
-		}
-		items = append(items, Item{
-			Game:         r.Game,
-			Source:       r.Source,
-			ExternalID:   r.ExternalID,
-			Slug:         r.Slug,
-			Name:         r.Name,
-			Description:  r.Description,
-			ImageURL:     r.ImageURL,
-			Translations: translations,
+func (t *NoopTransformer) Transform(r source.RawItem) (Item, error) {
+	translations := make([]Translation, 0, len(r.Translations))
+	for _, tr := range r.Translations {
+		translations = append(translations, Translation{
+			LanguageCode: tr.LanguageCode,
+			Name:         tr.Name,
+			Description:  tr.Description,
 		})
 	}
-	return items, nil
+	return Item{
+		Game:         r.Game,
+		Source:       r.Source,
+		ExternalID:   r.ExternalID,
+		Slug:         r.Slug,
+		Name:         r.Name,
+		Description:  r.Description,
+		ImageURL:     r.ImageURL,
+		Translations: translations,
+	}, nil
 }

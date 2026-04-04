@@ -25,7 +25,7 @@ type RawItem struct {
 }
 
 type Source interface {
-	Fetch(ctx context.Context) ([]RawItem, error)
+	Stream(ctx context.Context, consume func(RawItem) error) error
 }
 
 type Config struct {

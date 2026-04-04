@@ -101,6 +101,30 @@ type ItemTranslation struct {
 
 Поддержка локализаций может быть оформлена либо отдельными endpoint'ами, либо как часть `create/update` payload, но хранение должно оставаться раздельным на уровне модели.
 
+Получение локализованного ответа работает через query param `language`.
+
+Примеры:
+
+```bash
+curl -sS 'http://localhost:8084/items/<ITEM_ID>?language=ru'
+```
+
+```bash
+curl -sS 'http://localhost:8084/items?game=warframe&source=market&language=ru&limit=20&offset=0'
+```
+
+```bash
+curl -sS 'http://localhost:8084/items/search?q=prime&game=warframe&language=ru&limit=20&offset=0'
+```
+
+В ответе при этом будут дополнительные поля:
+
+- `localized_name`
+- `localized_description`
+- `localized_language`
+
+Если перевод для указанного языка не найден, сервис делает fallback на базовые `name` и `description`.
+
 Поиск работает так:
 
 - `q` — обязательная строка поиска
@@ -128,6 +152,25 @@ curl -sS -X POST http://localhost:8084/items/upsert \
     "name":"Frost Prime Set"
   }'
 ```
+
+`POST /items/upsert` используется `tools/catalog-importer` как ingestion endpoint.
+
+Текущий подтвержденный поток наполнения каталога такой:
+
+- внешний источник отдает список предметов
+- importer при необходимости догружает item card
+- importer отправляет каждый предмет отдельно в `POST /items/upsert`
+- базовые поля (`name`, `description`, `image_url`) пишутся в `items`
+- локализации пишутся в `item_translations`
+
+Для `warframe` сейчас подтвержден такой сценарий:
+
+- `en` карточка наполняет `items`
+- `ru` карточка наполняет `item_translations`
+
+Документация по реальному импорту лежит в:
+
+- `tools/catalog-importer/README.md`
 
 ## Swagger / OpenAPI
 
@@ -219,6 +262,28 @@ make catalog-test-integration
 ```bash
 make catalog-build
 ```
+
+Backup базы каталога в `pg_dump` custom format:
+
+```bash
+make catalog-backup
+```
+
+При необходимости можно указать свой путь:
+
+```bash
+make catalog-backup BACKUP_FILE=backups/catalog-manual.dump
+```
+
+Restore из backup:
+
+```bash
+make catalog-restore BACKUP_FILE=backups/catalog-manual.dump
+```
+
+`catalog-restore` использует `pg_restore --clean --if-exists`, то есть перед восстановлением очищает существующие объекты в целевой БД.
+
+Эти команды используют `pg_dump` и `pg_restore` внутри контейнера `postgres-catalog`, чтобы избежать несовместимости версий локального PostgreSQL-клиента и серверного PostgreSQL.
 
 При необходимости прямой локальный прогон без `make`:
 

@@ -34,6 +34,11 @@ paths:
             type: string
           description: Filter by source code
         - in: query
+          name: language
+          schema:
+            type: string
+          description: Optional response language code for localized_name and localized_description
+        - in: query
           name: active_only
           schema:
             type: boolean
@@ -63,6 +68,40 @@ paths:
                 $ref: '#/components/schemas/ListItemsResponse'
         '400':
           description: Invalid query params
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create a catalog item
+      tags: [items]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateItemRequest'
+      responses:
+        '201':
+          description: Item created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Item already exists for game, source and external_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Create item failed
           content:
             application/json:
               schema:
@@ -116,40 +155,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-    post:
-      summary: Create a catalog item
-      tags: [items]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateItemRequest'
-      responses:
-        '201':
-          description: Item created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ItemResponse'
-        '400':
-          description: Invalid request body
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '409':
-          description: Item already exists for game, source and external_id
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Create item failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
   /items/upsert:
     post:
       summary: Create or update a catalog item by game, source and external_id
@@ -183,6 +188,11 @@ paths:
           required: true
           schema:
             type: string
+        - in: query
+          name: language
+          schema:
+            type: string
+          description: Optional response language code for localized_name and localized_description
       responses:
         '200':
           description: Item found
@@ -327,9 +337,18 @@ components:
         name:
           type: string
           example: Primed Continuity
+        localized_name:
+          type: string
+          example: Праймед Континуити
         description:
           type: string
           example: Mod that increases ability duration.
+        localized_description:
+          type: string
+          example: Модификация, увеличивающая длительность способностей.
+        localized_language:
+          type: string
+          example: ru
         image_url:
           type: string
           example: https://cdn.example.com/items/primed-continuity.png

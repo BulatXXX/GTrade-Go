@@ -122,6 +122,7 @@ func (h *Handler) DeleteItem(c *gin.Context) {
 }
 
 func (h *Handler) GetItemByID(c *gin.Context) {
+	language := c.Query("language")
 	item, err := h.catalogService.GetItemByID(c.Request.Context(), c.Param("id"))
 	if err != nil {
 		switch {
@@ -135,10 +136,11 @@ func (h *Handler) GetItemByID(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, model.ItemResponse{Item: *item})
+	c.JSON(http.StatusOK, model.ItemResponse{Item: localizeItem(*item, language)})
 }
 
 func (h *Handler) ListItems(c *gin.Context) {
+	language := c.Query("language")
 	limit, err := parseIntQuery(c, "limit", 20)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit"})
@@ -173,13 +175,14 @@ func (h *Handler) ListItems(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, model.ListItemsResponse{
-		Items:  items,
+		Items:  localizeItems(items, language),
 		Limit:  limit,
 		Offset: offset,
 	})
 }
 
 func (h *Handler) SearchItems(c *gin.Context) {
+	language := c.Query("language")
 	limit, err := parseIntQuery(c, "limit", 20)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit"})
@@ -200,7 +203,7 @@ func (h *Handler) SearchItems(c *gin.Context) {
 	items, err := h.catalogService.SearchItems(c.Request.Context(), model.SearchItemsFilter{
 		Query:      c.Query("q"),
 		Game:       c.Query("game"),
-		Language:   c.Query("language"),
+		Language:   language,
 		ActiveOnly: activeOnly,
 		Limit:      limit,
 		Offset:     offset,
@@ -215,7 +218,7 @@ func (h *Handler) SearchItems(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, model.ListItemsResponse{
-		Items:  items,
+		Items:  localizeItems(items, language),
 		Limit:  limit,
 		Offset: offset,
 	})

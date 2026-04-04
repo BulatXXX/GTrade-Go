@@ -1,4 +1,4 @@
-.PHONY: up down logs build clean migrate-list auth-up auth-down auth-logs auth-db-up auth-db-down auth-test auth-test-integration auth-notification-up auth-notification-down auth-notification-logs auth-notification-e2e-test notification-up notification-down notification-logs notification-db-up notification-db-down notification-test notification-test-integration catalog-up catalog-down catalog-logs catalog-db-up catalog-db-down catalog-test catalog-test-integration catalog-build
+.PHONY: up down logs build clean migrate-list auth-up auth-down auth-logs auth-db-up auth-db-down auth-test auth-test-integration auth-notification-up auth-notification-down auth-notification-logs auth-notification-e2e-test notification-up notification-down notification-logs notification-db-up notification-db-down notification-test notification-test-integration catalog-up catalog-down catalog-logs catalog-db-up catalog-db-down catalog-test catalog-test-integration catalog-build catalog-backup catalog-restore
 
 up:
 	docker compose -f deploy/docker-compose.yml --env-file deploy/.env up --build -d
@@ -100,6 +100,18 @@ catalog-test-integration:
 
 catalog-build:
 	cd services/catalog-service && go build ./...
+
+catalog-backup:
+	@mkdir -p backups
+	@backup_file=$${BACKUP_FILE:-backups/catalog-$$(date +%Y%m%d-%H%M%S).dump}; \
+	echo "Creating catalog backup: $$backup_file"; \
+	docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec -T postgres-catalog \
+		pg_dump -U gtrade -d gtrade_catalog -Fc > "$$backup_file"
+
+catalog-restore:
+	@if [ -z "$(BACKUP_FILE)" ]; then echo "BACKUP_FILE is required. Example: make catalog-restore BACKUP_FILE=backups/catalog-20260405-013000.dump"; exit 1; fi
+	@cat "$(BACKUP_FILE)" | docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec -T postgres-catalog \
+		pg_restore -U gtrade -d gtrade_catalog --clean --if-exists
 
 build:
 	for d in services/* tools/catalog-importer; do \

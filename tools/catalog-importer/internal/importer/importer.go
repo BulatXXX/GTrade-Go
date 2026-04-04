@@ -2,6 +2,7 @@ package importer
 
 import (
 	"context"
+	"fmt"
 	"gtrade/tools/catalog-importer/internal/repository"
 	"gtrade/tools/catalog-importer/internal/source"
 	"gtrade/tools/catalog-importer/internal/transform"
@@ -18,13 +19,21 @@ func New(src source.Source, tr transform.Transformer, repo repository.Repository
 }
 
 func (i *Importer) Run(ctx context.Context) error {
-	raw, err := i.source.Fetch(ctx)
-	if err != nil {
-		return err
-	}
-	items, err := i.transformer.Transform(raw)
-	if err != nil {
-		return err
-	}
-	return i.repository.Upsert(items)
+	processed := 0
+	return i.source.Stream(ctx, func(raw source.RawItem) error {
+		item, err := i.transformer.Transform(raw)
+		if err != nil {
+			return err
+		}
+		if err := i.repository.Upsert([]transform.Item{item}); err != nil {
+			return err
+		}
+
+		processed++
+		if processed == 1 || processed%25 == 0 {
+			fmt.Printf("catalog import progress: processed=%d game=%s source=%s slug=%s\n", processed, item.Game, item.Source, item.Slug)
+		}
+
+		return nil
+	})
 }

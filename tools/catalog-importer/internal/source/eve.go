@@ -13,7 +13,8 @@ func NewEVESource() *EVESource {
 	return &EVESource{}
 }
 
-func (s *EVESource) Fetch(ctx context.Context) ([]RawItem, error) {
+func (s *EVESource) Stream(ctx context.Context, consume func(RawItem) error) error {
 	_ = ctx
-	return nil, ErrNotImplemented
+	_ = consume
+	return ErrNotImplemented
 }

@@ -79,6 +79,18 @@ make catalog-test
 make catalog-test-integration
 ```
 
+Backup базы `catalog-service`:
+
+```bash
+make catalog-backup
+```
+
+Restore базы `catalog-service`:
+
+```bash
+make catalog-restore BACKUP_FILE=backups/catalog-20260405-013000.dump
+```
+
 Живой e2e-контур между `auth-service` и `notification-service`:
 
 ```bash

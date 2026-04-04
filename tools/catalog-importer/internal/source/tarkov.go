@@ -8,7 +8,8 @@ func NewTarkovSource() *TarkovSource {
 	return &TarkovSource{}
 }
 
-func (s *TarkovSource) Fetch(ctx context.Context) ([]RawItem, error) {
+func (s *TarkovSource) Stream(ctx context.Context, consume func(RawItem) error) error {
 	_ = ctx
-	return nil, ErrNotImplemented
+	_ = consume
+	return ErrNotImplemented
 }
