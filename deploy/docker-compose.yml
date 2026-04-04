@@ -129,7 +129,9 @@ services:
       - "8083:8083"
 
   catalog-service:
-    build: ../services/catalog-service
+    build:
+      context: ../
+      dockerfile: deploy/dockerfiles/catalog-service.Dockerfile
     env_file: ./.env
     environment:
       SERVICE_NAME: catalog-service

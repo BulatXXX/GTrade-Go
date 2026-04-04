@@ -1,4 +1,4 @@
-.PHONY: up down logs build clean migrate-list auth-up auth-down auth-logs auth-db-up auth-db-down auth-test auth-test-integration auth-notification-up auth-notification-down auth-notification-logs auth-notification-e2e-test notification-up notification-down notification-logs notification-db-up notification-db-down notification-test notification-test-integration
+.PHONY: up down logs build clean migrate-list auth-up auth-down auth-logs auth-db-up auth-db-down auth-test auth-test-integration auth-notification-up auth-notification-down auth-notification-logs auth-notification-e2e-test notification-up notification-down notification-logs notification-db-up notification-db-down notification-test notification-test-integration catalog-up catalog-down catalog-logs catalog-db-up catalog-db-down catalog-test catalog-test-integration catalog-build
 
 up:
 	docker compose -f deploy/docker-compose.yml --env-file deploy/.env up --build -d
@@ -72,6 +72,34 @@ notification-test-integration:
 	@if [ ! -f deploy/.env ]; then echo "deploy/.env is missing. Run: cp deploy/.env.example deploy/.env"; exit 1; fi
 	docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d postgres-notification
 	cd services/notification-service && TEST_DATABASE_URL='postgres://gtrade:gtrade@localhost:5437/gtrade_notification?sslmode=disable' GOCACHE=/tmp/gocache-notification go test ./internal/http -run TestSendEmailIntegration -v
+
+catalog-up:
+	docker compose -f deploy/docker-compose.yml --env-file deploy/.env up --build -d postgres-catalog catalog-service
+
+catalog-down:
+	docker compose -f deploy/docker-compose.yml --env-file deploy/.env rm -sf catalog-service postgres-catalog
+
+catalog-logs:
+	docker compose -f deploy/docker-compose.yml --env-file deploy/.env logs -f postgres-catalog catalog-service
+
+catalog-db-up:
+	docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d postgres-catalog
+
+catalog-db-down:
+	docker compose -f deploy/docker-compose.yml --env-file deploy/.env rm -sf postgres-catalog
+
+catalog-test:
+	@if [ ! -f deploy/.env ]; then echo "deploy/.env is missing. Run: cp deploy/.env.example deploy/.env"; exit 1; fi
+	docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d postgres-catalog
+	cd services/catalog-service && TEST_DATABASE_URL='postgres://gtrade:gtrade@localhost:5436/gtrade_catalog?sslmode=disable' GOCACHE=/tmp/gocache-catalog go test ./...
+
+catalog-test-integration:
+	@if [ ! -f deploy/.env ]; then echo "deploy/.env is missing. Run: cp deploy/.env.example deploy/.env"; exit 1; fi
+	docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d postgres-catalog
+	cd services/catalog-service && TEST_DATABASE_URL='postgres://gtrade:gtrade@localhost:5436/gtrade_catalog?sslmode=disable' GOCACHE=/tmp/gocache-catalog go test ./internal/repository -v
+
+catalog-build:
+	cd services/catalog-service && go build ./...
 
 build:
 	for d in services/* tools/catalog-importer; do \

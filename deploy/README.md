@@ -33,6 +33,14 @@ make notification-up
 make notification-logs
 ```
 
+Минимальный запуск только catalog:
+
+```bash
+cp deploy/.env.example deploy/.env
+make catalog-up
+make catalog-logs
+```
+
 Тесты `auth-service` одной командой:
 
 ```bash
@@ -56,6 +64,19 @@ make notification-test
 
 ```bash
 make notification-test-integration
+```
+
+Тесты `catalog-service` одной командой:
+
+```bash
+cp deploy/.env.example deploy/.env
+make catalog-test
+```
+
+Только интеграционные тесты `catalog-service`:
+
+```bash
+make catalog-test-integration
 ```
 
 Живой e2e-контур между `auth-service` и `notification-service`:
