@@ -50,6 +50,31 @@
 - account endpoint'ы вроде `GET /me` при необходимости
 - swagger-ui или другой способ локально просматривать OpenAPI
 
+## Ключевые файлы
+
+- `internal/service/auth.go` — основная бизнес-логика auth flow
+- `internal/repository/auth_repository.go` — работа с PostgreSQL
+- `internal/handler/auth.go` — HTTP handlers
+- `internal/model/auth.go` — request/response DTO
+- `internal/http/service_routes.go` — маршруты сервиса
+- `migrations/0001_init.sql` — базовая auth schema
+- `migrations/0002_account_lifecycle.sql` — password reset и email verification schema changes
+- `docs/README.md` — как запускать и вручную проверять сервис
+- `docs/openapi.yaml` — актуальный OpenAPI/Swagger конфиг
+
+## Следующий шаг
+
+- связать `auth-service` с `notification-service`
+- перестать возвращать reset/verification token в API-ответах
+- перевести flow на email delivery через notification layer
+
+## Текущие ограничения
+
+- reset token и verification token пока возвращаются в API-ответах
+- flow подходит для dev/MVP, но не для production
+- нет rate limiting и защиты от enumeration
+- нет logout / revoke endpoint
+
 ## Smoke tests
 
 Смоки лежат в `internal/http/router_smoke_test.go`.
