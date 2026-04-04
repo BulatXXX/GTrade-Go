@@ -114,6 +114,8 @@ curl -X POST http://localhost:8085/send-email \
 
 После этого в `notification_outbox` должна появиться запись со статусом `sent` или `failed`.
 
+HTTP status: `202`
+
 Если нужен repeatable системный тест без реальной отправки письма:
 
 ```bash
