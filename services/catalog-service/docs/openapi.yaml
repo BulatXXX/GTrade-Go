@@ -1,0 +1,363 @@
+openapi: 3.0.3
+info:
+  title: GTrade Catalog Service API
+  version: 1.0.0
+  description: OpenAPI specification for the first MVP of catalog-service.
+servers:
+  - url: http://localhost:8084
+    description: Local development
+paths:
+  /health:
+    get:
+      summary: Health check
+      tags: [health]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /items:
+    get:
+      summary: List catalog items
+      tags: [items]
+      parameters:
+        - in: query
+          name: game
+          schema:
+            type: string
+          description: Filter by game code
+        - in: query
+          name: source
+          schema:
+            type: string
+          description: Filter by source code
+        - in: query
+          name: active_only
+          schema:
+            type: boolean
+            default: true
+          description: Return only active items
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 20
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Item list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListItemsResponse'
+        '400':
+          description: Invalid query params
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create a catalog item
+      tags: [items]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateItemRequest'
+      responses:
+        '201':
+          description: Item created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Item already exists for game, source and external_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Create item failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /items/{id}:
+    get:
+      summary: Get item by id
+      tags: [items]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Get item failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      summary: Update an existing catalog item
+      tags: [items]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateItemRequest'
+      responses:
+        '200':
+          description: Item updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemResponse'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Update item failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Deactivate catalog item
+      description: Default delete behavior is soft delete via is_active=false.
+      tags: [items]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteItemResponse'
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Delete item failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service]
+      properties:
+        status:
+          type: string
+          example: ok
+        service:
+          type: string
+          example: catalog-service
+    ItemTranslation:
+      type: object
+      required: [language_code, name]
+      properties:
+        language_code:
+          type: string
+          example: ru
+        name:
+          type: string
+          example: Праймед Континуити
+        description:
+          type: string
+          example: Модификация, увеличивающая длительность способностей.
+    Item:
+      type: object
+      required:
+        - id
+        - game
+        - source
+        - external_id
+        - slug
+        - name
+        - is_active
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          example: item_01HZY3Y8VYB1T2Q9R5R9K7N1AA
+        game:
+          type: string
+          example: warframe
+        source:
+          type: string
+          example: market
+        external_id:
+          type: string
+          example: primed-continuity
+        slug:
+          type: string
+          example: primed-continuity
+        name:
+          type: string
+          example: Primed Continuity
+        description:
+          type: string
+          example: Mod that increases ability duration.
+        image_url:
+          type: string
+          example: https://cdn.example.com/items/primed-continuity.png
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        translations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemTranslation'
+    CreateItemRequest:
+      type: object
+      required: [game, source, external_id, slug, name]
+      properties:
+        game:
+          type: string
+          example: warframe
+        source:
+          type: string
+          example: market
+        external_id:
+          type: string
+          example: primed-continuity
+        slug:
+          type: string
+          example: primed-continuity
+        name:
+          type: string
+          example: Primed Continuity
+        description:
+          type: string
+          example: Mod that increases ability duration.
+        image_url:
+          type: string
+          example: https://cdn.example.com/items/primed-continuity.png
+        translations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemTranslation'
+    UpdateItemRequest:
+      type: object
+      properties:
+        slug:
+          type: string
+          example: primed-continuity
+        name:
+          type: string
+          example: Primed Continuity
+        description:
+          type: string
+          example: Mod that increases ability duration.
+        image_url:
+          type: string
+          example: https://cdn.example.com/items/primed-continuity.png
+        is_active:
+          type: boolean
+          example: true
+        translations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemTranslation'
+    ItemResponse:
+      type: object
+      required: [item]
+      properties:
+        item:
+          $ref: '#/components/schemas/Item'
+    ListItemsResponse:
+      type: object
+      required: [items, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+        limit:
+          type: integer
+          format: int32
+          example: 20
+        offset:
+          type: integer
+          format: int32
+          example: 0
+    DeleteItemResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: deactivated
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: item not found

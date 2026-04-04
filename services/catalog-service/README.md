@@ -1,9 +1,19 @@
 # catalog-service
 
-Базовый Go-скелет микросервиса GTrade.
+Сервис каталога предметов GTrade.
 
-- HTTP-сервер на отдельном порту
+## Текущее состояние
+
+Сейчас в сервисе уже есть:
+
 - `GET /health`
-- загрузка конфигурации из env
-- подключение к PostgreSQL через repository layer
-- placeholder endpoint'ы для домена сервиса
+- общий HTTP-каркас
+- shared middleware для request id и logging
+- placeholder route'ы домена каталога
+
+Но бизнес-логика каталога еще не реализована.
+
+Подробная документация сервиса вынесена в:
+
+- `docs/README.md`
+- `docs/openapi.yaml`
