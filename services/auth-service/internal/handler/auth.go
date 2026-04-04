@@ -71,14 +71,79 @@ func (h *Handler) Refresh(c *gin.Context) {
 	h.respondWithTokenPair(c, pair)
 }
 
-func (h *Handler) Placeholder(action string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"service": h.serviceName,
-			"action":  action,
-			"status":  "not_implemented",
-		})
+func (h *Handler) RequestPasswordReset(c *gin.Context) {
+	var req model.PasswordResetRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
+
+	resetToken, err := h.authService.RequestPasswordReset(c.Request.Context(), req.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "password reset request failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, model.PasswordResetRequestResponse{
+		Status:     "accepted",
+		ResetToken: resetToken,
+	})
+}
+
+func (h *Handler) ConfirmPasswordReset(c *gin.Context) {
+	var req model.PasswordResetConfirmRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.authService.ConfirmPasswordReset(c.Request.Context(), req.Token, req.NewPassword); err != nil {
+		if errors.Is(err, service.ErrInvalidToken) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid password reset token"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "password reset confirm failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, model.ActionStatusResponse{Status: "password_reset"})
+}
+
+func (h *Handler) EmailVerify(c *gin.Context) {
+	var req model.EmailVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.Token != "" {
+		if err := h.authService.VerifyEmail(c.Request.Context(), req.Token); err != nil {
+			if errors.Is(err, service.ErrInvalidToken) {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid verification token"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "email verification failed"})
+			return
+		}
+
+		c.JSON(http.StatusOK, model.EmailVerifyResponse{Status: "verified"})
+		return
+	}
+
+	verificationToken, err := h.authService.RequestEmailVerification(c.Request.Context(), req.Email)
+	if err != nil {
+		if errors.Is(err, service.ErrUserNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "email verification request failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, model.EmailVerifyResponse{
+		Status:            "verification_requested",
+		VerificationToken: verificationToken,
+	})
 }
 
 func (h *Handler) respondWithTokenPair(c *gin.Context, pair *service.TokenPair) {

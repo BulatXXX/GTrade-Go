@@ -16,9 +16,13 @@ import (
 )
 
 type stubAuthService struct {
-	registerFn func(ctx context.Context, email, password string) (*service.TokenPair, error)
-	loginFn    func(ctx context.Context, email, password string) (*service.TokenPair, error)
-	refreshFn  func(ctx context.Context, refreshToken string) (*service.TokenPair, error)
+	registerFn                 func(ctx context.Context, email, password string) (*service.TokenPair, error)
+	loginFn                    func(ctx context.Context, email, password string) (*service.TokenPair, error)
+	refreshFn                  func(ctx context.Context, refreshToken string) (*service.TokenPair, error)
+	requestPasswordResetFn     func(ctx context.Context, email string) (string, error)
+	confirmPasswordResetFn     func(ctx context.Context, token, newPassword string) error
+	requestEmailVerificationFn func(ctx context.Context, email string) (string, error)
+	verifyEmailFn              func(ctx context.Context, token string) error
 }
 
 func (s stubAuthService) Register(ctx context.Context, email, password string) (*service.TokenPair, error) {
@@ -31,6 +35,22 @@ func (s stubAuthService) Login(ctx context.Context, email, password string) (*se
 
 func (s stubAuthService) Refresh(ctx context.Context, refreshToken string) (*service.TokenPair, error) {
 	return s.refreshFn(ctx, refreshToken)
+}
+
+func (s stubAuthService) RequestPasswordReset(ctx context.Context, email string) (string, error) {
+	return s.requestPasswordResetFn(ctx, email)
+}
+
+func (s stubAuthService) ConfirmPasswordReset(ctx context.Context, token, newPassword string) error {
+	return s.confirmPasswordResetFn(ctx, token, newPassword)
+}
+
+func (s stubAuthService) RequestEmailVerification(ctx context.Context, email string) (string, error) {
+	return s.requestEmailVerificationFn(ctx, email)
+}
+
+func (s stubAuthService) VerifyEmail(ctx context.Context, token string) error {
+	return s.verifyEmailFn(ctx, token)
 }
 
 func TestRouterSmoke(t *testing.T) {
@@ -62,6 +82,33 @@ func TestRouterSmoke(t *testing.T) {
 					return nil, service.ErrInvalidToken
 				}
 				return tokenPair, nil
+			},
+			requestPasswordResetFn: func(ctx context.Context, email string) (string, error) {
+				if email == "missing@example.com" {
+					return "", nil
+				}
+				return "reset-token", nil
+			},
+			confirmPasswordResetFn: func(ctx context.Context, token, newPassword string) error {
+				if token != "valid-reset-token" {
+					return service.ErrInvalidToken
+				}
+				return nil
+			},
+			requestEmailVerificationFn: func(ctx context.Context, email string) (string, error) {
+				if email == "missing@example.com" {
+					return "", service.ErrUserNotFound
+				}
+				if email == "verified@example.com" {
+					return "", nil
+				}
+				return "verification-token", nil
+			},
+			verifyEmailFn: func(ctx context.Context, token string) error {
+				if token != "valid-verification-token" {
+					return service.ErrInvalidToken
+				}
+				return nil
 			},
 		}),
 	)
@@ -152,36 +199,65 @@ func TestRouterSmoke(t *testing.T) {
 			},
 		},
 		{
-			name:       "password reset request placeholder",
+			name:       "password reset request",
 			method:     http.MethodPost,
 			path:       "/password/reset/request",
+			body:       map[string]string{"email": "user@example.com"},
 			wantStatus: http.StatusOK,
 			wantJSONFields: map[string]any{
-				"service": "auth-service",
-				"action":  "password_reset_request",
-				"status":  "not_implemented",
+				"status":      "accepted",
+				"reset_token": "reset-token",
 			},
 		},
 		{
-			name:       "password reset confirm placeholder",
+			name:       "password reset confirm",
 			method:     http.MethodPost,
 			path:       "/password/reset/confirm",
+			body:       map[string]string{"token": "valid-reset-token", "new_password": "secret2"},
 			wantStatus: http.StatusOK,
 			wantJSONFields: map[string]any{
-				"service": "auth-service",
-				"action":  "password_reset_confirm",
-				"status":  "not_implemented",
+				"status": "password_reset",
 			},
 		},
 		{
-			name:       "email verify placeholder",
+			name:       "password reset confirm unauthorized",
+			method:     http.MethodPost,
+			path:       "/password/reset/confirm",
+			body:       map[string]string{"token": "bad-token", "new_password": "secret2"},
+			wantStatus: http.StatusUnauthorized,
+			wantJSONFields: map[string]any{
+				"error": "invalid password reset token",
+			},
+		},
+		{
+			name:       "email verify request",
 			method:     http.MethodPost,
 			path:       "/email/verify",
+			body:       map[string]string{"email": "user@example.com"},
 			wantStatus: http.StatusOK,
 			wantJSONFields: map[string]any{
-				"service": "auth-service",
-				"action":  "email_verify",
-				"status":  "not_implemented",
+				"status":             "verification_requested",
+				"verification_token": "verification-token",
+			},
+		},
+		{
+			name:       "email verify confirm",
+			method:     http.MethodPost,
+			path:       "/email/verify",
+			body:       map[string]string{"token": "valid-verification-token"},
+			wantStatus: http.StatusOK,
+			wantJSONFields: map[string]any{
+				"status": "verified",
+			},
+		},
+		{
+			name:       "email verify unauthorized",
+			method:     http.MethodPost,
+			path:       "/email/verify",
+			body:       map[string]string{"token": "bad-verification-token"},
+			wantStatus: http.StatusUnauthorized,
+			wantJSONFields: map[string]any{
+				"error": "invalid verification token",
 			},
 		},
 	}
@@ -219,6 +295,18 @@ func TestRouterSmoke_BadJSON(t *testing.T) {
 			},
 			refreshFn: func(ctx context.Context, refreshToken string) (*service.TokenPair, error) {
 				return nil, errors.New("unexpected call")
+			},
+			requestPasswordResetFn: func(ctx context.Context, email string) (string, error) {
+				return "", errors.New("unexpected call")
+			},
+			confirmPasswordResetFn: func(ctx context.Context, token, newPassword string) error {
+				return errors.New("unexpected call")
+			},
+			requestEmailVerificationFn: func(ctx context.Context, email string) (string, error) {
+				return "", errors.New("unexpected call")
+			},
+			verifyEmailFn: func(ctx context.Context, token string) error {
+				return errors.New("unexpected call")
 			},
 		}),
 	)

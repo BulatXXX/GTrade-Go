@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -20,8 +20,6 @@ import (
 const testJWTSecret = "integration-test-secret"
 
 func TestAuthServiceIntegration_RegisterLoginRefresh(t *testing.T) {
-	t.Parallel()
-
 	ctx := context.Background()
 	pool := newTestPool(t, ctx)
 	repo := repository.NewAuthRepository(pool)
@@ -93,8 +91,6 @@ func TestAuthServiceIntegration_RegisterLoginRefresh(t *testing.T) {
 }
 
 func TestAuthServiceIntegration_DuplicateRegisterAndInvalidLogin(t *testing.T) {
-	t.Parallel()
-
 	ctx := context.Background()
 	pool := newTestPool(t, ctx)
 	repo := repository.NewAuthRepository(pool)
@@ -118,6 +114,67 @@ func TestAuthServiceIntegration_DuplicateRegisterAndInvalidLogin(t *testing.T) {
 	}
 }
 
+func TestAuthServiceIntegration_PasswordResetAndEmailVerification(t *testing.T) {
+	ctx := context.Background()
+	pool := newTestPool(t, ctx)
+	repo := repository.NewAuthRepository(pool)
+	svc := service.NewAuthService(repo, testJWTSecret)
+
+	email := fmt.Sprintf("flow-%d@example.com", time.Now().UnixNano())
+	oldPassword := "secret123"
+	newPassword := "secret456"
+
+	if _, err := svc.Register(ctx, email, oldPassword); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	resetToken, err := svc.RequestPasswordReset(ctx, email)
+	if err != nil {
+		t.Fatalf("request password reset: %v", err)
+	}
+	if resetToken == "" {
+		t.Fatal("expected password reset token to be returned")
+	}
+
+	if err := svc.ConfirmPasswordReset(ctx, resetToken, newPassword); err != nil {
+		t.Fatalf("confirm password reset: %v", err)
+	}
+
+	_, err = svc.Login(ctx, email, oldPassword)
+	if !errors.Is(err, service.ErrInvalidCredentials) {
+		t.Fatalf("login with old password error = %v, want %v", err, service.ErrInvalidCredentials)
+	}
+
+	if _, err := svc.Login(ctx, email, newPassword); err != nil {
+		t.Fatalf("login with new password: %v", err)
+	}
+
+	verificationToken, err := svc.RequestEmailVerification(ctx, email)
+	if err != nil {
+		t.Fatalf("request email verification: %v", err)
+	}
+	if verificationToken == "" {
+		t.Fatal("expected email verification token to be returned")
+	}
+
+	if err := svc.VerifyEmail(ctx, verificationToken); err != nil {
+		t.Fatalf("verify email: %v", err)
+	}
+
+	user, err := repo.GetUserByEmail(ctx, email)
+	if err != nil {
+		t.Fatalf("get user by email: %v", err)
+	}
+	if user == nil || !user.EmailVerified {
+		t.Fatal("expected user email to be marked verified")
+	}
+
+	_, err = svc.RequestEmailVerification(ctx, "missing@example.com")
+	if !errors.Is(err, service.ErrUserNotFound) {
+		t.Fatalf("request email verification for missing user error = %v, want %v", err, service.ErrUserNotFound)
+	}
+}
+
 func newTestPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	t.Helper()
 
@@ -135,7 +192,7 @@ func newTestPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
 
 	applyAuthMigration(t, ctx, pool.Exec)
 
-	if _, err := pool.Exec(ctx, "TRUNCATE TABLE refresh_tokens, users RESTART IDENTITY"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE TABLE email_verification_tokens, password_reset_tokens, refresh_tokens, users RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("truncate tables: %v", err)
 	}
 
@@ -149,25 +206,27 @@ func applyAuthMigration(
 ) {
 	t.Helper()
 
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolve current file path")
-	}
-
-	migrationPath := filepath.Join(filepath.Dir(currentFile), "..", "..", "migrations", "0001_init.sql")
-	migrationSQL, err := os.ReadFile(migrationPath)
+	migrationPaths, err := filepath.Glob(filepath.Join("..", "..", "migrations", "*.sql"))
 	if err != nil {
-		t.Fatalf("read migration file: %v", err)
+		t.Fatalf("glob migration files: %v", err)
 	}
+	sort.Strings(migrationPaths)
 
-	statements := strings.Split(string(migrationSQL), ";")
-	for _, statement := range statements {
-		statement = strings.TrimSpace(statement)
-		if statement == "" {
-			continue
+	for _, migrationPath := range migrationPaths {
+		migrationSQL, err := os.ReadFile(migrationPath)
+		if err != nil {
+			t.Fatalf("read migration file %s: %v", migrationPath, err)
 		}
-		if _, err := execFn(ctx, statement); err != nil {
-			t.Fatalf("apply migration statement %q: %v", statement, err)
+
+		statements := strings.Split(string(migrationSQL), ";")
+		for _, statement := range statements {
+			statement = strings.TrimSpace(statement)
+			if statement == "" {
+				continue
+			}
+			if _, err := execFn(ctx, statement); err != nil {
+				t.Fatalf("apply migration %s statement %q: %v", migrationPath, statement, err)
+			}
 		}
 	}
 }

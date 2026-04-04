@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -15,6 +17,7 @@ import (
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrInvalidToken       = errors.New("invalid token")
+	ErrUserNotFound       = errors.New("user not found")
 )
 
 type TokenPair struct {
@@ -33,6 +36,8 @@ type AuthService struct {
 	jwtSecret  []byte
 	accessTTL  time.Duration
 	refreshTTL time.Duration
+	resetTTL   time.Duration
+	verifyTTL  time.Duration
 }
 
 func NewAuthService(repo *repository.AuthRepository, jwtSecret string) *AuthService {
@@ -41,6 +46,8 @@ func NewAuthService(repo *repository.AuthRepository, jwtSecret string) *AuthServ
 		jwtSecret:  []byte(jwtSecret),
 		accessTTL:  15 * time.Minute,
 		refreshTTL: 7 * 24 * time.Hour,
+		resetTTL:   time.Hour,
+		verifyTTL:  24 * time.Hour,
 	}
 }
 
@@ -119,6 +126,108 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*TokenP
 	return s.issueTokenPair(ctx, user.ID, user.Email)
 }
 
+func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) (string, error) {
+	if email == "" {
+		return "", ErrUserNotFound
+	}
+
+	user, err := s.repo.GetUserByEmail(ctx, email)
+	if err != nil {
+		return "", err
+	}
+	if user == nil {
+		return "", nil
+	}
+
+	token, err := generateOpaqueToken()
+	if err != nil {
+		return "", err
+	}
+
+	if err := s.repo.SavePasswordResetToken(ctx, user.ID, token, time.Now().Add(s.resetTTL)); err != nil {
+		return "", err
+	}
+
+	return token, nil
+}
+
+func (s *AuthService) ConfirmPasswordReset(ctx context.Context, token, newPassword string) error {
+	if token == "" || newPassword == "" {
+		return ErrInvalidToken
+	}
+
+	resetToken, err := s.repo.GetPasswordResetToken(ctx, token)
+	if err != nil {
+		return err
+	}
+	if resetToken == nil || resetToken.UsedAt != nil || time.Now().After(resetToken.ExpiresAt) {
+		return ErrInvalidToken
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	if err := s.repo.UpdateUserPassword(ctx, resetToken.UserID, string(hash)); err != nil {
+		return err
+	}
+	if err := s.repo.UsePasswordResetToken(ctx, token); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *AuthService) RequestEmailVerification(ctx context.Context, email string) (string, error) {
+	if email == "" {
+		return "", ErrUserNotFound
+	}
+
+	user, err := s.repo.GetUserByEmail(ctx, email)
+	if err != nil {
+		return "", err
+	}
+	if user == nil {
+		return "", ErrUserNotFound
+	}
+	if user.EmailVerified {
+		return "", nil
+	}
+
+	token, err := generateOpaqueToken()
+	if err != nil {
+		return "", err
+	}
+
+	if err := s.repo.SaveEmailVerificationToken(ctx, user.ID, token, time.Now().Add(s.verifyTTL)); err != nil {
+		return "", err
+	}
+
+	return token, nil
+}
+
+func (s *AuthService) VerifyEmail(ctx context.Context, token string) error {
+	if token == "" {
+		return ErrInvalidToken
+	}
+
+	verifyToken, err := s.repo.GetEmailVerificationToken(ctx, token)
+	if err != nil {
+		return err
+	}
+	if verifyToken == nil || verifyToken.UsedAt != nil || time.Now().After(verifyToken.ExpiresAt) {
+		return ErrInvalidToken
+	}
+
+	if err := s.repo.MarkEmailVerified(ctx, verifyToken.UserID); err != nil {
+		return err
+	}
+	if err := s.repo.UseEmailVerificationToken(ctx, token); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *AuthService) issueTokenPair(ctx context.Context, userID int64, email string) (*TokenPair, error) {
 	now := time.Now()
 	accessExp := now.Add(s.accessTTL)
@@ -178,4 +287,12 @@ func (s *AuthService) parseToken(raw string) (*tokenClaims, error) {
 		return nil, ErrInvalidToken
 	}
 	return claims, nil
+}
+
+func generateOpaqueToken() (string, error) {
+	var raw [32]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", fmt.Errorf("generate token: %w", err)
+	}
+	return hex.EncodeToString(raw[:]), nil
 }
