@@ -57,6 +57,21 @@ make notification-test
 make notification-test-integration
 ```
 
+Живой системный e2e-тест связки `auth-service -> notification-service`:
+
+```bash
+make auth-notification-e2e-test
+```
+
+Этот сценарий поднимает реальные контейнеры `auth-service`, `notification-service`, `postgres-auth`, `postgres-notification` и проверяет:
+
+- `POST /password/reset/request`
+- `POST /email/verify`
+- отсутствие токенов в публичном API `auth-service`
+- появление записей в `notification_outbox`
+
+Для стабильности этот e2e-контур использует `EMAIL_PROVIDER=mock`, а не реальный Resend.
+
 ## Ручная проверка API
 
 Базовый адрес:
@@ -98,6 +113,12 @@ curl -X POST http://localhost:8085/send-email \
 ```
 
 После этого в `notification_outbox` должна появиться запись со статусом `sent` или `failed`.
+
+Если нужен repeatable системный тест без реальной отправки письма:
+
+```bash
+make auth-notification-e2e-test
+```
 
 ## Типовые ошибки
 

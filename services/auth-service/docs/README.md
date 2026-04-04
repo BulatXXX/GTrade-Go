@@ -55,6 +55,19 @@ make auth-test
 make auth-test-integration
 ```
 
+Живой системный e2e-тест связки `auth-service -> notification-service`:
+
+```bash
+make auth-notification-e2e-test
+```
+
+Этот сценарий поднимает реальные контейнеры `auth-service`, `notification-service`, `postgres-auth`, `postgres-notification` и проверяет:
+
+- `POST /password/reset/request`
+- `POST /email/verify`
+- отсутствие токенов в публичном API
+- появление записей в `notification_outbox`
+
 ## Ручная проверка API
 
 Базовый адрес:
@@ -154,6 +167,12 @@ curl -X POST http://localhost:8081/password/reset/request \
 ```
 
 Токен больше не возвращается в API-ответе. Для реальной проверки reset flow письмо должно быть доставлено через `notification-service`.
+
+Если нужен repeatable системный тест без реального email provider, используй:
+
+```bash
+make auth-notification-e2e-test
+```
 
 ### 6. Confirm password reset
 

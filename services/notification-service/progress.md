@@ -21,6 +21,8 @@
 - unit tests сервисного слоя
 - интеграционные тесты с реальной PostgreSQL
 - живая проверка отправки через Resend
+- интеграция с `auth-service`
+- live e2e тест связки `auth-service -> notification-service`
 
 ## Готовые endpoint'ы
 
@@ -38,7 +40,6 @@
 
 ## Что нужно доделать
 
-- интеграция `auth-service` с `notification-service`
 - шаблоны писем под password reset и email verification
 - внутренний auth/allowlist для межсервисного вызова `POST /send-email`
 - более явное разделение provider errors и validation errors на уровне HTTP
@@ -61,9 +62,9 @@
 
 ## Следующий шаг
 
-- подключить `auth-service` к `notification-service`
-- перестать возвращать reset/verification token в API-ответах `auth-service`
-- перевести auth flow на email delivery через notification layer
+- закрыть межсервисную защиту для `POST /send-email`
+- при необходимости вынести шаблоны писем в отдельный слой
+- расширять notification layer под другие доменные уведомления
 
 ## Текущие ограничения
 
@@ -71,6 +72,7 @@
 - нет фонового worker/retry механизма, отправка выполняется синхронно в HTTP request flow
 - нет отдельного шаблонизатора писем, тело письма приходит готовым в запросе
 - успешная отправка через Resend требует verified domain и корректный `RESEND_FROM_EMAIL`
+- текущий e2e системный тест использует `mock` provider, а не реальный Resend, чтобы быть стабильным
 
 ## Тесты
 
@@ -78,9 +80,19 @@
 - интеграционные HTTP tests с PostgreSQL лежат в `internal/http/router_integration_test.go`
 - unit tests сервисного слоя лежат в `internal/service/email_test.go`
 
+Системный e2e тест связки с `auth-service` лежит в:
+
+- `../auth-service/internal/e2e/auth_notification_e2e_test.go`
+
 Проверка:
 
 ```bash
 cd services/notification-service
 TEST_DATABASE_URL='postgres://gtrade:gtrade@localhost:5437/gtrade_notification?sslmode=disable' GOCACHE=/tmp/gocache-notification go test ./...
+```
+
+Полный live e2e контур с `auth-service`:
+
+```bash
+make auth-notification-e2e-test
 ```
