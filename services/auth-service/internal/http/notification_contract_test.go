@@ -23,7 +23,7 @@ func TestRouterContract_PasswordResetRequestDoesNotExposeToken(t *testing.T) {
 	ctx := context.Background()
 	pool := newAuthHTTPTestPool(t, ctx)
 	repo := repository.NewAuthRepository(pool)
-	svc := service.NewAuthService(repo, testJWTSecret)
+	svc := service.NewAuthService(repo, testJWTSecret, service.NoopEmailNotifier{})
 
 	email := "notify-password-reset@example.com"
 	if _, err := svc.Register(ctx, email, "secret123"); err != nil {
@@ -60,7 +60,7 @@ func TestRouterContract_EmailVerificationRequestDoesNotExposeToken(t *testing.T)
 	ctx := context.Background()
 	pool := newAuthHTTPTestPool(t, ctx)
 	repo := repository.NewAuthRepository(pool)
-	svc := service.NewAuthService(repo, testJWTSecret)
+	svc := service.NewAuthService(repo, testJWTSecret, service.NoopEmailNotifier{})
 
 	email := "notify-email-verify@example.com"
 	if _, err := svc.Register(ctx, email, "secret123"); err != nil {

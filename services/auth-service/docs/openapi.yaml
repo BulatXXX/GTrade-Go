@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: GTrade Auth Service API
   version: 1.0.0
-  description: OpenAPI specification for the current auth-service MVP flow.
+  description: OpenAPI specification for the current auth-service flow with notification-service integration.
 servers:
   - url: http://localhost:8081
     description: Local development
@@ -125,7 +125,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /password/reset/request:
     post:
-      summary: Create password reset token
+      summary: Create password reset token and send email
       tags: [password-reset]
       requestBody:
         required: true
@@ -135,7 +135,7 @@ paths:
               $ref: '#/components/schemas/PasswordResetRequest'
       responses:
         '200':
-          description: Password reset token created
+          description: Password reset accepted
           content:
             application/json:
               schema:
@@ -191,7 +191,7 @@ paths:
     post:
       summary: Request or confirm email verification
       description: |
-        If `email` is provided, creates an email verification token.
+        If `email` is provided, creates an email verification token and sends it through notification-service.
         If `token` is provided, confirms email verification.
       tags: [email-verification]
       requestBody:
@@ -329,10 +329,6 @@ components:
         status:
           type: string
           example: accepted
-        reset_token:
-          type: string
-          nullable: true
-          example: 5bc7a31b3d3f43759a...
     EmailVerifyResponse:
       type: object
       required: [status]
@@ -340,10 +336,6 @@ components:
         status:
           type: string
           example: verification_requested
-        verification_token:
-          type: string
-          nullable: true
-          example: c9a1732f84d3476ab2...
     ErrorResponse:
       type: object
       required: [error]

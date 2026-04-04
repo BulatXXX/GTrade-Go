@@ -7,11 +7,12 @@ import (
 )
 
 type Config struct {
-	ServiceName string
-	Port        int
-	DatabaseURL string
-	JWTSecret   string
-	LogLevel    string
+	ServiceName            string
+	Port                   int
+	DatabaseURL            string
+	JWTSecret              string
+	LogLevel               string
+	NotificationServiceURL string
 }
 
 func Load() (Config, error) {
@@ -21,11 +22,12 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		ServiceName: getEnv("SERVICE_NAME", "service"),
-		Port:        port,
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		JWTSecret:   getEnv("JWT_SECRET", "change-me"),
-		LogLevel:    getEnv("LOG_LEVEL", "info"),
+		ServiceName:            getEnv("SERVICE_NAME", "service"),
+		Port:                   port,
+		DatabaseURL:            os.Getenv("DATABASE_URL"),
+		JWTSecret:              getEnv("JWT_SECRET", "change-me"),
+		LogLevel:               getEnv("LOG_LEVEL", "info"),
+		NotificationServiceURL: getEnv("NOTIFICATION_SERVICE_URL", "http://notification-service:8085"),
 	}
 
 	return cfg, nil

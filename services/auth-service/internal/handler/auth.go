@@ -78,15 +78,14 @@ func (h *Handler) RequestPasswordReset(c *gin.Context) {
 		return
 	}
 
-	resetToken, err := h.authService.RequestPasswordReset(c.Request.Context(), req.Email)
+	_, err := h.authService.RequestPasswordReset(c.Request.Context(), req.Email)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "password reset request failed"})
 		return
 	}
 
 	c.JSON(http.StatusOK, model.PasswordResetRequestResponse{
-		Status:     "accepted",
-		ResetToken: resetToken,
+		Status: "accepted",
 	})
 }
 
@@ -130,7 +129,7 @@ func (h *Handler) EmailVerify(c *gin.Context) {
 		return
 	}
 
-	verificationToken, err := h.authService.RequestEmailVerification(c.Request.Context(), req.Email)
+	_, err := h.authService.RequestEmailVerification(c.Request.Context(), req.Email)
 	if err != nil {
 		if errors.Is(err, service.ErrUserNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
@@ -141,8 +140,7 @@ func (h *Handler) EmailVerify(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, model.EmailVerifyResponse{
-		Status:            "verification_requested",
-		VerificationToken: verificationToken,
+		Status: "verification_requested",
 	})
 }
 

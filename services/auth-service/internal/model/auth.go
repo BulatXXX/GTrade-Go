@@ -40,11 +40,9 @@ type ActionStatusResponse struct {
 }
 
 type PasswordResetRequestResponse struct {
-	Status     string `json:"status"`
-	ResetToken string `json:"reset_token,omitempty"`
+	Status string `json:"status"`
 }
 
 type EmailVerifyResponse struct {
-	Status            string `json:"status"`
-	VerificationToken string `json:"verification_token,omitempty"`
+	Status string `json:"status"`
 }

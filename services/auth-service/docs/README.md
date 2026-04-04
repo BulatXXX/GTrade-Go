@@ -7,6 +7,7 @@
 - Docker Desktop
 - `make`
 - `curl`
+- поднятый `notification-service` для request flow password reset и email verification
 
 ## Быстрый старт
 
@@ -16,19 +17,25 @@
 cp deploy/.env.example deploy/.env
 ```
 
-2. Поднять `auth-service` и его PostgreSQL:
+2. Для полного request flow поднять `notification-service`:
+
+```bash
+make notification-up
+```
+
+3. Поднять `auth-service` и его PostgreSQL:
 
 ```bash
 make auth-up
 ```
 
-3. Посмотреть логи:
+4. Посмотреть логи:
 
 ```bash
 make auth-logs
 ```
 
-4. Остановить:
+5. Остановить:
 
 ```bash
 make auth-down
@@ -142,16 +149,15 @@ curl -X POST http://localhost:8081/password/reset/request \
 
 ```json
 {
-  "status": "accepted",
-  "reset_token": "..."
+  "status": "accepted"
 }
 ```
 
-Сейчас `reset_token` возвращается в ответе специально для dev/MVP.
+Токен больше не возвращается в API-ответе. Для реальной проверки reset flow письмо должно быть доставлено через `notification-service`.
 
 ### 6. Confirm password reset
 
-Подставить `reset_token` из предыдущего шага:
+Подставить `reset_token`, полученный из письма:
 
 ```bash
 curl -X POST http://localhost:8081/password/reset/confirm \
@@ -181,16 +187,15 @@ curl -X POST http://localhost:8081/email/verify \
 
 ```json
 {
-  "status": "verification_requested",
-  "verification_token": "..."
+  "status": "verification_requested"
 }
 ```
 
-Сейчас `verification_token` возвращается в ответе специально для dev/MVP.
+Токен больше не возвращается в API-ответе. Для реальной проверки verify flow письмо должно быть доставлено через `notification-service`.
 
 ### 8. Confirm email verification
 
-Подставить `verification_token` из предыдущего шага:
+Подставить `verification_token`, полученный из письма:
 
 ```bash
 curl -X POST http://localhost:8081/email/verify \

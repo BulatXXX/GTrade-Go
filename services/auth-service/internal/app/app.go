@@ -33,7 +33,8 @@ func Run(ctx context.Context) error {
 	defer pool.Close()
 
 	authRepo := repository.NewAuthRepository(pool)
-	authService := service.NewAuthService(authRepo, cfg.JWTSecret)
+	notifier := service.NewNotificationClient(cfg.NotificationServiceURL)
+	authService := service.NewAuthService(authRepo, cfg.JWTSecret, notifier)
 	h := handler.New(cfg.ServiceName, authService)
 	r := httpserver.NewRouter(logger, h)
 

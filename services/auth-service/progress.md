@@ -15,6 +15,7 @@
 - JWT access/refresh token flow
 - password reset flow
 - email verification flow
+- интеграция `auth-service` с `notification-service`
 - smoke tests HTTP-слоя
 - интеграционные тесты с реальной PostgreSQL
 - локальная документация и OpenAPI в `docs/`
@@ -31,17 +32,13 @@
 
 ## Текущий MVP flow
 
-- `POST /password/reset/request` создает reset token, сохраняет его в БД и сейчас возвращает его в API-ответе
+- `POST /password/reset/request` создает reset token, сохраняет его в БД и отправляет его через `notification-service`
 - `POST /password/reset/confirm` принимает reset token и новый пароль, затем меняет пароль
-- `POST /email/verify` в режиме request создает verification token и сейчас возвращает его в API-ответе
+- `POST /email/verify` в режиме request создает verification token и отправляет его через `notification-service`
 - `POST /email/verify` в режиме confirm принимает verification token и помечает email как подтвержденный
-
-Такой flow подходит для локальной разработки и ручной проверки, но не является production-ready.
 
 ## Что нужно доделать
 
-- интеграция `auth-service` с `notification-service`
-- отправка reset token и verification token через email, а не в API-ответе
 - разделение request/confirm сценариев на более явный публичный контракт при необходимости
 - валидация email и password на уровне входных DTO
 - защита от user enumeration в reset/verify request flow
@@ -64,14 +61,14 @@
 
 ## Следующий шаг
 
-- связать `auth-service` с `notification-service`
-- перестать возвращать reset/verification token в API-ответах
-- перевести flow на email delivery через notification layer
+- стабилизировать публичный контракт reset/verify flow
+- при необходимости разделить request/confirm endpoint'ы явнее
+- усилить защиту от enumeration и rate limiting
 
 ## Текущие ограничения
 
-- reset token и verification token пока возвращаются в API-ответах
-- flow подходит для dev/MVP, но не для production
+- reset/verification токены больше не возвращаются в API-ответах
+- доставка email зависит от доступности `notification-service`
 - нет rate limiting и защиты от enumeration
 - нет logout / revoke endpoint
 

@@ -1,4 +1,4 @@
-.PHONY: up down logs build clean migrate-list auth-up auth-down auth-logs auth-db-up auth-db-down auth-test auth-test-integration notification-up notification-down notification-logs notification-db-up notification-db-down notification-test notification-test-integration
+.PHONY: up down logs build clean migrate-list auth-up auth-down auth-logs auth-db-up auth-db-down auth-test auth-test-integration auth-notification-up auth-notification-down auth-notification-logs auth-notification-e2e-test notification-up notification-down notification-logs notification-db-up notification-db-down notification-test notification-test-integration
 
 up:
 	docker compose -f deploy/docker-compose.yml --env-file deploy/.env up --build -d
@@ -33,6 +33,20 @@ auth-test-integration:
 	@if [ ! -f deploy/.env ]; then echo "deploy/.env is missing. Run: cp deploy/.env.example deploy/.env"; exit 1; fi
 	docker compose -f deploy/docker-compose.auth.yml --env-file deploy/.env up -d postgres-auth
 	cd services/auth-service && TEST_DATABASE_URL='postgres://gtrade:gtrade@localhost:5433/gtrade_auth?sslmode=disable' GOCACHE=/tmp/gocache-auth go test ./internal/service -run TestAuthServiceIntegration -v
+
+auth-notification-up:
+	EMAIL_PROVIDER=mock docker compose -f deploy/docker-compose.yml --env-file deploy/.env up --build -d postgres-auth postgres-notification notification-service auth-service
+
+auth-notification-down:
+	docker compose -f deploy/docker-compose.yml --env-file deploy/.env rm -sf auth-service notification-service postgres-auth postgres-notification
+
+auth-notification-logs:
+	docker compose -f deploy/docker-compose.yml --env-file deploy/.env logs -f postgres-auth postgres-notification notification-service auth-service
+
+auth-notification-e2e-test:
+	@if [ ! -f deploy/.env ]; then echo "deploy/.env is missing. Run: cp deploy/.env.example deploy/.env"; exit 1; fi
+	EMAIL_PROVIDER=mock docker compose -f deploy/docker-compose.yml --env-file deploy/.env up --build -d postgres-auth postgres-notification notification-service auth-service
+	cd services/auth-service && AUTH_BASE_URL='http://localhost:8081' NOTIFICATION_TEST_DATABASE_URL='postgres://gtrade:gtrade@localhost:5437/gtrade_notification?sslmode=disable' GOCACHE=/tmp/gocache-auth go test ./internal/e2e -v
 
 notification-up:
 	docker compose -f deploy/docker-compose.yml --env-file deploy/.env up --build -d postgres-notification notification-service

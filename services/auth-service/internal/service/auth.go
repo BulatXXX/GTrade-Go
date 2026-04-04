@@ -33,6 +33,7 @@ type tokenClaims struct {
 
 type AuthService struct {
 	repo       *repository.AuthRepository
+	notifier   EmailNotifier
 	jwtSecret  []byte
 	accessTTL  time.Duration
 	refreshTTL time.Duration
@@ -40,9 +41,14 @@ type AuthService struct {
 	verifyTTL  time.Duration
 }
 
-func NewAuthService(repo *repository.AuthRepository, jwtSecret string) *AuthService {
+func NewAuthService(repo *repository.AuthRepository, jwtSecret string, notifier EmailNotifier) *AuthService {
+	if notifier == nil {
+		notifier = NoopEmailNotifier{}
+	}
+
 	return &AuthService{
 		repo:       repo,
+		notifier:   notifier,
 		jwtSecret:  []byte(jwtSecret),
 		accessTTL:  15 * time.Minute,
 		refreshTTL: 7 * 24 * time.Hour,
@@ -148,6 +154,16 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) (s
 		return "", err
 	}
 
+	if err := s.notifier.SendEmail(
+		ctx,
+		user.Email,
+		"Reset your password",
+		buildPasswordResetHTMLBody(token),
+		buildPasswordResetTextBody(token),
+	); err != nil {
+		return "", fmt.Errorf("send password reset email: %w", err)
+	}
+
 	return token, nil
 }
 
@@ -201,6 +217,16 @@ func (s *AuthService) RequestEmailVerification(ctx context.Context, email string
 
 	if err := s.repo.SaveEmailVerificationToken(ctx, user.ID, token, time.Now().Add(s.verifyTTL)); err != nil {
 		return "", err
+	}
+
+	if err := s.notifier.SendEmail(
+		ctx,
+		user.Email,
+		"Verify your email",
+		buildEmailVerificationHTMLBody(token),
+		buildEmailVerificationTextBody(token),
+	); err != nil {
+		return "", fmt.Errorf("send email verification: %w", err)
 	}
 
 	return token, nil
@@ -294,4 +320,20 @@ func generateOpaqueToken() (string, error) {
 		return "", fmt.Errorf("generate token: %w", err)
 	}
 	return hex.EncodeToString(raw[:]), nil
+}
+
+func buildPasswordResetHTMLBody(token string) string {
+	return fmt.Sprintf("<p>Password reset requested.</p><p>Reset token: <strong>%s</strong></p>", token)
+}
+
+func buildPasswordResetTextBody(token string) string {
+	return fmt.Sprintf("Password reset requested.\nReset token: %s", token)
+}
+
+func buildEmailVerificationHTMLBody(token string) string {
+	return fmt.Sprintf("<p>Email verification requested.</p><p>Verification token: <strong>%s</strong></p>", token)
+}
+
+func buildEmailVerificationTextBody(token string) string {
+	return fmt.Sprintf("Email verification requested.\nVerification token: %s", token)
 }

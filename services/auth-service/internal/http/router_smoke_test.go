@@ -205,8 +205,7 @@ func TestRouterSmoke(t *testing.T) {
 			body:       map[string]string{"email": "user@example.com"},
 			wantStatus: http.StatusOK,
 			wantJSONFields: map[string]any{
-				"status":      "accepted",
-				"reset_token": "reset-token",
+				"status": "accepted",
 			},
 		},
 		{
@@ -236,8 +235,7 @@ func TestRouterSmoke(t *testing.T) {
 			body:       map[string]string{"email": "user@example.com"},
 			wantStatus: http.StatusOK,
 			wantJSONFields: map[string]any{
-				"status":             "verification_requested",
-				"verification_token": "verification-token",
+				"status": "verification_requested",
 			},
 		},
 		{
