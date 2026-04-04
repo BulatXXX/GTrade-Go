@@ -24,3 +24,16 @@ cp deploy/.env.example deploy/.env
 make auth-up
 make auth-logs
 ```
+
+Тесты `auth-service` одной командой:
+
+```bash
+cp deploy/.env.example deploy/.env
+make auth-test
+```
+
+Только интеграционные тесты с реальной Postgres:
+
+```bash
+make auth-test-integration
+```
