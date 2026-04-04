@@ -7,12 +7,14 @@ import (
 )
 
 type Config struct {
-	ServiceName  string
-	Port         int
-	DatabaseURL  string
-	JWTSecret    string
-	LogLevel     string
-	ResendAPIKey string
+	ServiceName     string
+	Port            int
+	DatabaseURL     string
+	JWTSecret       string
+	LogLevel        string
+	ResendAPIKey    string
+	ResendFromEmail string
+	EmailProvider   string
 }
 
 func Load() (Config, error) {
@@ -22,15 +24,24 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		ServiceName:  getEnv("SERVICE_NAME", "service"),
-		Port:         port,
-		DatabaseURL:  os.Getenv("DATABASE_URL"),
-		JWTSecret:    getEnv("JWT_SECRET", "change-me"),
-		LogLevel:     getEnv("LOG_LEVEL", "info"),
-		ResendAPIKey: getEnv("RESEND_API_KEY", ""),
+		ServiceName:     getEnv("SERVICE_NAME", "service"),
+		Port:            port,
+		DatabaseURL:     os.Getenv("DATABASE_URL"),
+		JWTSecret:       getEnv("JWT_SECRET", "change-me"),
+		LogLevel:        getEnv("LOG_LEVEL", "info"),
+		ResendAPIKey:    getEnv("RESEND_API_KEY", ""),
+		ResendFromEmail: getEnv("RESEND_FROM_EMAIL", "GTrade <onboarding@resend.dev>"),
+		EmailProvider:   getEnv("EMAIL_PROVIDER", defaultProvider(os.Getenv("RESEND_API_KEY"))),
 	}
 
 	return cfg, nil
+}
+
+func defaultProvider(apiKey string) string {
+	if apiKey != "" {
+		return "resend"
+	}
+	return "mock"
 }
 
 func getEnv(key, fallback string) string {

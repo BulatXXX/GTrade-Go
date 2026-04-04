@@ -14,14 +14,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 	"gtrade/services/notification-service/internal/handler"
+	"gtrade/services/notification-service/internal/model"
 	"gtrade/services/notification-service/internal/repository"
+	"gtrade/services/notification-service/internal/service"
+	"gtrade/services/notification-service/internal/service/provider"
 )
 
 func TestSendEmailIntegration_PersistsOutboxRecord(t *testing.T) {
 	ctx := context.Background()
 	pool := newNotificationTestPool(t, ctx)
+	repo := repository.NewNotificationRepository(pool)
+	emailService := service.NewEmailService(repo, provider.NewMockProvider(zerolog.Nop()), "GTrade <onboarding@resend.dev>")
 
-	router := NewRouter(zerolog.Nop(), handler.New("notification-service"))
+	router := NewRouter(zerolog.Nop(), handler.New("notification-service", emailService))
 
 	req := newNotificationJSONRequest(t, http.MethodPost, "/send-email", map[string]string{
 		"to":        "user@example.com",
@@ -64,6 +69,35 @@ func TestSendEmailIntegration_PersistsOutboxRecord(t *testing.T) {
 	}
 	if status != "sent" {
 		t.Fatalf("status = %q, want %q", status, "sent")
+	}
+}
+
+func TestSendEmailIntegration_ValidationErrorDoesNotPersistOutboxRecord(t *testing.T) {
+	ctx := context.Background()
+	pool := newNotificationTestPool(t, ctx)
+	repo := repository.NewNotificationRepository(pool)
+	emailService := service.NewEmailService(repo, provider.NewMockProvider(zerolog.Nop()), "GTrade <onboarding@resend.dev>")
+
+	router := NewRouter(zerolog.Nop(), handler.New("notification-service", emailService))
+
+	req := newNotificationJSONRequest(t, http.MethodPost, "/send-email", model.SendEmailRequest{
+		Subject:  "Missing recipient",
+		TextBody: "No recipient",
+	})
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+
+	var count int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM notification_outbox`).Scan(&count); err != nil {
+		t.Fatalf("count notification_outbox: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("notification_outbox count = %d, want 0", count)
 	}
 }
 

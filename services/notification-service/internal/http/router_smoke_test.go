@@ -2,19 +2,37 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/rs/zerolog"
 	"gtrade/services/notification-service/internal/handler"
+	"gtrade/services/notification-service/internal/model"
 )
+
+type stubEmailService struct {
+	sendEmailFn func(ctx context.Context, req model.SendEmailRequest) (*model.SendEmailResponse, error)
+}
+
+func (s stubEmailService) SendEmail(ctx context.Context, req model.SendEmailRequest) (*model.SendEmailResponse, error) {
+	return s.sendEmailFn(ctx, req)
+}
 
 func TestRouterSmoke_SendEmailQueuesNotification(t *testing.T) {
 	t.Parallel()
 
-	router := NewRouter(zerolog.Nop(), handler.New("notification-service"))
+	router := NewRouter(zerolog.Nop(), handler.New("notification-service", stubEmailService{
+		sendEmailFn: func(ctx context.Context, req model.SendEmailRequest) (*model.SendEmailResponse, error) {
+			if req.To != "user@example.com" {
+				return nil, errors.New("unexpected recipient")
+			}
+			return &model.SendEmailResponse{ID: 42, Status: "queued"}, nil
+		},
+	}))
 
 	req := newNotificationJSONRequest(t, http.MethodPost, "/send-email", map[string]string{
 		"to":        "user@example.com",
@@ -31,6 +49,7 @@ func TestRouterSmoke_SendEmailQueuesNotification(t *testing.T) {
 	}
 
 	assertNotificationJSONFields(t, rec.Body.Bytes(), map[string]any{
+		"id":     float64(42),
 		"status": "queued",
 	})
 }
@@ -38,7 +57,11 @@ func TestRouterSmoke_SendEmailQueuesNotification(t *testing.T) {
 func TestRouterSmoke_SendEmailValidation(t *testing.T) {
 	t.Parallel()
 
-	router := NewRouter(zerolog.Nop(), handler.New("notification-service"))
+	router := NewRouter(zerolog.Nop(), handler.New("notification-service", stubEmailService{
+		sendEmailFn: func(ctx context.Context, req model.SendEmailRequest) (*model.SendEmailResponse, error) {
+			return nil, errors.New("to is required")
+		},
+	}))
 
 	req := newNotificationJSONRequest(t, http.MethodPost, "/send-email", map[string]string{
 		"subject":   "Reset your password",

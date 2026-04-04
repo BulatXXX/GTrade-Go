@@ -1,0 +1,99 @@
+openapi: 3.0.3
+info:
+  title: GTrade Notification Service API
+  version: 1.0.0
+  description: API сервиса отправки email-уведомлений GTrade.
+servers:
+  - url: http://localhost:8085
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: notificationHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /send-email:
+    post:
+      summary: Queue and send email
+      operationId: sendEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendEmailRequest'
+      responses:
+        '202':
+          description: Email accepted for delivery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendEmailResponse'
+        '400':
+          description: Validation error or provider error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - service
+      properties:
+        status:
+          type: string
+          example: ok
+        service:
+          type: string
+          example: notification-service
+    SendEmailRequest:
+      type: object
+      required:
+        - to
+        - subject
+      properties:
+        to:
+          type: string
+          example: user@example.com
+        subject:
+          type: string
+          example: Reset your password
+        html_body:
+          type: string
+          example: "<p>Reset your password</p>"
+        text_body:
+          type: string
+          example: Reset your password
+        from:
+          type: string
+          example: GTrade <noreply@2dots.online>
+      description: Хотя бы одно из полей `html_body` или `text_body` должно быть заполнено.
+    SendEmailResponse:
+      type: object
+      required:
+        - id
+        - status
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        status:
+          type: string
+          example: queued
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: to is required

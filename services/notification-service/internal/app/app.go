@@ -12,6 +12,8 @@ import (
 	"gtrade/services/notification-service/internal/handler"
 	httpserver "gtrade/services/notification-service/internal/http"
 	"gtrade/services/notification-service/internal/repository"
+	"gtrade/services/notification-service/internal/service"
+	"gtrade/services/notification-service/internal/service/provider"
 )
 
 func Run(ctx context.Context) error {
@@ -22,17 +24,24 @@ func Run(ctx context.Context) error {
 
 	logger := zerolog.New(os.Stdout).With().Timestamp().Str("service", cfg.ServiceName).Logger()
 
-	if cfg.DatabaseURL != "" {
-		pool, err := repository.NewPostgresPool(ctx, cfg.DatabaseURL)
-		if err != nil {
-			return fmt.Errorf("connect postgres: %w", err)
-		}
-		defer pool.Close()
-	} else {
-		logger.Warn().Msg("DATABASE_URL is empty, postgres connection skipped")
+	if cfg.DatabaseURL == "" {
+		return fmt.Errorf("DATABASE_URL is required")
 	}
 
-	h := handler.New(cfg.ServiceName)
+	pool, err := repository.NewPostgresPool(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return fmt.Errorf("connect postgres: %w", err)
+	}
+	defer pool.Close()
+
+	repo := repository.NewNotificationRepository(pool)
+	emailProvider, err := newEmailProvider(cfg, logger)
+	if err != nil {
+		return fmt.Errorf("configure email provider: %w", err)
+	}
+	emailService := service.NewEmailService(repo, emailProvider, cfg.ResendFromEmail)
+
+	h := handler.New(cfg.ServiceName, emailService)
 	r := httpserver.NewRouter(logger, h)
 
 	srv := &http.Server{
@@ -60,5 +69,16 @@ func Run(ctx context.Context) error {
 			return fmt.Errorf("server error: %w", err)
 		}
 		return nil
+	}
+}
+
+func newEmailProvider(cfg config.Config, logger zerolog.Logger) (provider.EmailProvider, error) {
+	switch cfg.EmailProvider {
+	case "mock":
+		return provider.NewMockProvider(logger), nil
+	case "resend":
+		return provider.NewResendProvider(cfg.ResendAPIKey), nil
+	default:
+		return nil, fmt.Errorf("unsupported email provider: %s", cfg.EmailProvider)
 	}
 }

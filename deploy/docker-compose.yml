@@ -139,7 +139,9 @@ services:
         condition: service_healthy
 
   notification-service:
-    build: ../services/notification-service
+    build:
+      context: ../
+      dockerfile: deploy/dockerfiles/notification-service.Dockerfile
     env_file: ./.env
     environment:
       SERVICE_NAME: notification-service

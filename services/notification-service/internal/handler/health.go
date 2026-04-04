@@ -1,18 +1,24 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"gtrade/services/notification-service/internal/model"
 )
 
-type Handler struct {
-	serviceName string
+type EmailUseCase interface {
+	SendEmail(ctx context.Context, req model.SendEmailRequest) (*model.SendEmailResponse, error)
 }
 
-func New(serviceName string) *Handler {
-	return &Handler{serviceName: serviceName}
+type Handler struct {
+	serviceName  string
+	emailService EmailUseCase
+}
+
+func New(serviceName string, emailService EmailUseCase) *Handler {
+	return &Handler{serviceName: serviceName, emailService: emailService}
 }
 
 func (h *Handler) Health(c *gin.Context) {
