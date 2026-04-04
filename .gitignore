@@ -11,3 +11,4 @@ coverage.out
 
 # Env
 .env
+deploy/.env
