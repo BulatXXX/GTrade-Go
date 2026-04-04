@@ -69,7 +69,7 @@ func (s *AuthService) Register(ctx context.Context, email, password string) (*To
 		return nil, err
 	}
 
-	return s.issueTokenPair(ctx, user.ID, user.Email)
+	return s.issueTokenPair(ctx, user.ID)
 }
 
 func (s *AuthService) Login(ctx context.Context, email, password string) (*TokenPair, error) {
@@ -89,7 +89,7 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*Token
 		return nil, ErrInvalidCredentials
 	}
 
-	return s.issueTokenPair(ctx, user.ID, user.Email)
+	return s.issueTokenPair(ctx, user.ID)
 }
 
 func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*TokenPair, error) {
@@ -123,7 +123,7 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*TokenP
 		return nil, ErrInvalidToken
 	}
 
-	return s.issueTokenPair(ctx, user.ID, user.Email)
+	return s.issueTokenPair(ctx, user.ID)
 }
 
 func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) (string, error) {
@@ -228,7 +228,7 @@ func (s *AuthService) VerifyEmail(ctx context.Context, token string) error {
 	return nil
 }
 
-func (s *AuthService) issueTokenPair(ctx context.Context, userID int64, email string) (*TokenPair, error) {
+func (s *AuthService) issueTokenPair(ctx context.Context, userID int64) (*TokenPair, error) {
 	now := time.Now()
 	accessExp := now.Add(s.accessTTL)
 	refreshExp := now.Add(s.refreshTTL)
@@ -271,7 +271,6 @@ func (s *AuthService) issueTokenPair(ctx context.Context, userID int64, email st
 		return nil, err
 	}
 
-	_ = email
 	return &TokenPair{AccessToken: accessToken, RefreshToken: refreshToken, ExpiresIn: int64(s.accessTTL.Seconds())}, nil
 }
 
