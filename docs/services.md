@@ -3,6 +3,7 @@
 ## api-gateway
 - Назначение: внешний вход в API и маршрутизация запросов.
 - Порт: `8080`
+- Текущее состояние: placeholder, без реального proxy/service-client flow.
 - Основные endpoint'ы:
   - `GET /health`
   - группы маршрутов: `/api/auth`, `/api/users`, `/api/items`, `/api/notifications`
@@ -11,6 +12,7 @@
 ## auth-service
 - Назначение: аутентификация и account lifecycle.
 - Порт: `8081`
+- Текущее состояние: рабочий MVP+, интегрирован с `notification-service`.
 - Основные endpoint'ы:
   - `GET /health`
   - `POST /register`
@@ -19,13 +21,17 @@
   - `POST /password/reset/request`
   - `POST /password/reset/confirm`
   - `POST /email/verify`
-- Что хранит: `users`.
+- Что хранит: `users`, `refresh_tokens`, `password_reset_tokens`, `email_verification_tokens`.
+- Особенность: reset/verification токены больше не возвращаются в публичном API, а отправляются через `notification-service`.
 
 ## user-asset-service
 - Назначение: watchlist и пользовательские настройки.
 - Порт: `8082`
+- Текущее состояние: базовый CRUD поверх PostgreSQL.
 - Основные endpoint'ы:
   - `GET /health`
+  - `POST /users`
+  - `GET /users/:id`
   - `GET /watchlist`
   - `POST /watchlist`
   - `DELETE /watchlist/:id`
@@ -37,6 +43,7 @@
 ## api-integration-service
 - Назначение: интеграция с внешними маркетплейсами и адаптеры.
 - Порт: `8083`
+- Текущее состояние: placeholder.
 - Основные endpoint'ы:
   - `GET /health`
   - `GET /search`
@@ -47,6 +54,7 @@
 ## catalog-service
 - Назначение: каталог предметов и цены.
 - Порт: `8084`
+- Текущее состояние: в основном placeholder.
 - Основные endpoint'ы:
   - `GET /health`
   - `GET /items`
@@ -58,10 +66,12 @@
 ## notification-service
 - Назначение: отправка уведомлений и интеграция с email-провайдерами.
 - Порт: `8085`
+- Текущее состояние: рабочий сервис с PostgreSQL outbox.
 - Основные endpoint'ы:
   - `GET /health`
   - `POST /send-email`
 - Что хранит: `notification_outbox`.
+- Особенность: поддерживает `mock` provider для стабильных системных тестов и `Resend` для живой отправки.
 
 ## tools/catalog-importer
 - Назначение: CLI-импорт каталога из внешних источников.
@@ -69,3 +79,13 @@
 - Команда:
   - `catalog-importer -source warframe|eve|tarkov`
 - Что хранит: напрямую не хранит, пишет через repository abstraction.
+
+## Реальный системный тест сейчас
+
+На текущем этапе есть live e2e-контур между `auth-service` и `notification-service`:
+
+```bash
+make auth-notification-e2e-test
+```
+
+Он поднимает реальные контейнеры сервисов и их PostgreSQL и проверяет, что `auth-service` создает записи в `notification_outbox`.

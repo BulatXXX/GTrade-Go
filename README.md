@@ -25,6 +25,7 @@ GTrade Data System — платформа управления данными в
 - Gin
 - PostgreSQL
 - pgx pool
+- resty
 - zerolog
 - Docker / docker-compose
 
@@ -57,6 +58,30 @@ make up
 make down
 ```
 
+## Отдельные контуры запуска
+
+Только `notification-service` и его PostgreSQL:
+
+```bash
+make notification-up
+make notification-logs
+make notification-down
+```
+
+Только `auth-service` и его PostgreSQL:
+
+```bash
+make auth-up
+make auth-logs
+make auth-down
+```
+
+Живой e2e-контур `auth-service -> notification-service`:
+
+```bash
+make auth-notification-e2e-test
+```
+
 ## Порты сервисов
 
 - api-gateway: `8080`
@@ -80,22 +105,34 @@ make down
 - production-like skeleton для всех сервисов и утилиты
 - единый каркас: конфиг из env, логирование, HTTP, repository layer
 - health endpoint во всех сервисах
-- заглушки endpoint'ов по доменам
 - единый shared middleware: request id, logging, JWT auth validation
 - абстракции адаптеров маркетплейсов
-- абстракции провайдеров уведомлений (mock + resend skeleton)
+- `auth-service` с рабочими flow: register, login, refresh, password reset, email verification
+- интеграция `auth-service -> notification-service`
+- `notification-service` с PostgreSQL outbox, `mock` provider и рабочей интеграцией с Resend
+- `user-asset-service` с базовым CRUD для user/watchlist/preferences
+- unit, integration и live e2e тесты для связки `auth-service -> notification-service`
 - deploy-папка с docker-compose для локальной разработки на Mac
 
 ## Что пока заглушка
 
-- реальная бизнес-логика
 - реальный reverse proxy / service client flow в gateway
 - полное покрытие защищенных внутренних route'ов auth middleware
 - интеграции с внешними API маркетплейсов
-- полноценная интеграция с Resend
+- большая часть `catalog-service`
+- большая часть `api-integration-service`
+- значительная часть `api-gateway`
 - frontend вынесен в отдельный репозиторий
 
 ## Подход к данным
 
 БД оставлены только в сервисах, где хранится состояние в текущем этапе:
 `auth-service`, `user-asset-service`, `catalog-service`, `notification-service`.
+
+## Полезные документы
+
+- `docs/architecture.md` — текущее распределение ролей между сервисами
+- `docs/services.md` — краткая сводка по endpoint'ам и состоянию сервисов
+- `docs/roadmap.md` — общий roadmap и ближайшие приоритеты
+- `services/auth-service/progress.md` — актуальный статус auth flow
+- `services/notification-service/progress.md` — актуальный статус notification flow

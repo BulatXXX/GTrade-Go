@@ -25,6 +25,14 @@ make auth-up
 make auth-logs
 ```
 
+Минимальный запуск только notification:
+
+```bash
+cp deploy/.env.example deploy/.env
+make notification-up
+make notification-logs
+```
+
 Тесты `auth-service` одной командой:
 
 ```bash
@@ -36,4 +44,22 @@ make auth-test
 
 ```bash
 make auth-test-integration
+```
+
+Тесты `notification-service` одной командой:
+
+```bash
+make notification-test
+```
+
+Только интеграционные тесты `notification-service`:
+
+```bash
+make notification-test-integration
+```
+
+Живой e2e-контур между `auth-service` и `notification-service`:
+
+```bash
+make auth-notification-e2e-test
 ```
