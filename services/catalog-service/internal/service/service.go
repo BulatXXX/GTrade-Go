@@ -17,6 +17,7 @@ var (
 
 type Repository interface {
 	CreateItem(ctx context.Context, input model.CreateItemInput) (*model.Item, error)
+	UpsertItem(ctx context.Context, input model.CreateItemInput) (*model.Item, error)
 	UpdateItem(ctx context.Context, id string, input model.UpdateItemInput) (*model.Item, error)
 	DeactivateItem(ctx context.Context, id string) error
 	GetItemByID(ctx context.Context, id string) (*model.Item, error)
@@ -38,6 +39,18 @@ func (s *Service) CreateItem(ctx context.Context, input model.CreateItemInput) (
 	}
 
 	item, err := s.repo.CreateItem(ctx, normalizeCreateInput(input))
+	if err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+
+func (s *Service) UpsertItem(ctx context.Context, input model.CreateItemInput) (*model.Item, error) {
+	if err := validateCreateInput(input); err != nil {
+		return nil, err
+	}
+
+	item, err := s.repo.UpsertItem(ctx, normalizeCreateInput(input))
 	if err != nil {
 		return nil, err
 	}

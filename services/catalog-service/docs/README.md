@@ -92,6 +92,7 @@ type ItemTranslation struct {
 Минимальные HTTP-сценарии:
 
 - `POST /items`
+- `POST /items/upsert`
 - `PUT /items/:id`
 - `DELETE /items/:id`
 - `GET /items/:id`
@@ -112,6 +113,20 @@ type ItemTranslation struct {
 
 ```bash
 curl -sS 'http://localhost:8084/items/search?q=continuity&game=test&language=ru&limit=20&offset=0'
+```
+
+Для внутренних инструментов наполнения каталога доступен idempotent upsert:
+
+```bash
+curl -sS -X POST http://localhost:8084/items/upsert \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "game":"warframe",
+    "source":"market",
+    "external_id":"frost_prime_set",
+    "slug":"frost_prime_set",
+    "name":"Frost Prime Set"
+  }'
 ```
 
 ## Swagger / OpenAPI
@@ -220,6 +235,7 @@ cd services/catalog-service && TEST_DATABASE_URL='postgres://gtrade:gtrade@local
 - shared middleware для request id и logging
 - рабочие route'ы:
   - `POST /items`
+  - `POST /items/upsert`
   - `PUT /items/:id`
   - `DELETE /items/:id`
   - `GET /items/:id`

@@ -76,6 +76,58 @@ func (r *CatalogRepository) CreateItem(ctx context.Context, input model.CreateIt
 	return r.GetItemByID(ctx, item.ID)
 }
 
+func (r *CatalogRepository) UpsertItem(ctx context.Context, input model.CreateItemInput) (*model.Item, error) {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer rollback(ctx, tx)
+
+	id, err := newItemID()
+	if err != nil {
+		return nil, fmt.Errorf("generate item id: %w", err)
+	}
+
+	var item model.Item
+	query := `
+		INSERT INTO items (id, game, source, external_id, slug, name, description, image_url, is_active)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)
+		ON CONFLICT (game, source, external_id)
+		DO UPDATE SET
+			slug = EXCLUDED.slug,
+			name = EXCLUDED.name,
+			description = EXCLUDED.description,
+			image_url = EXCLUDED.image_url,
+			is_active = TRUE,
+			updated_at = NOW()
+		RETURNING id, game, source, external_id, slug, name, description, image_url, is_active, created_at, updated_at
+	`
+	if err := scanItem(tx.QueryRow(
+		ctx,
+		query,
+		id,
+		input.Game,
+		input.Source,
+		input.ExternalID,
+		input.Slug,
+		input.Name,
+		nullIfEmpty(input.Description),
+		nullIfEmpty(input.ImageURL),
+	), &item); err != nil {
+		return nil, fmt.Errorf("upsert item: %w", err)
+	}
+
+	if err := upsertTranslations(ctx, tx, item.ID, input.Translations, true); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit upsert item: %w", err)
+	}
+
+	return r.GetItemByID(ctx, item.ID)
+}
+
 func (r *CatalogRepository) UpdateItem(ctx context.Context, id string, input model.UpdateItemInput) (*model.Item, error) {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {

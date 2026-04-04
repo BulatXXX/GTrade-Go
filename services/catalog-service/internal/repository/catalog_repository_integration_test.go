@@ -189,6 +189,50 @@ func TestCatalogRepositoryIntegration_SearchItems_ByBaseNameAndTranslation(t *te
 	}
 }
 
+func TestCatalogRepositoryIntegration_UpsertItem_UpdatesExistingRecord(t *testing.T) {
+	ctx := context.Background()
+	pool := newCatalogTestPool(t, ctx)
+	repo := repository.NewCatalogRepository(pool)
+
+	first, err := repo.UpsertItem(ctx, model.CreateItemInput{
+		Game:       "test",
+		Source:     "market",
+		ExternalID: "upsert-item",
+		Slug:       "upsert-item",
+		Name:       "Upsert Item",
+		Translations: []model.ItemTranslation{
+			{LanguageCode: "ru", Name: "Апсерт Предмет"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("initial upsert: %v", err)
+	}
+
+	second, err := repo.UpsertItem(ctx, model.CreateItemInput{
+		Game:       "test",
+		Source:     "market",
+		ExternalID: "upsert-item",
+		Slug:       "upsert-item-updated",
+		Name:       "Upsert Item Updated",
+		Translations: []model.ItemTranslation{
+			{LanguageCode: "ru", Name: "Апсерт Предмет Обновлен"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("second upsert: %v", err)
+	}
+
+	if first.ID != second.ID {
+		t.Fatalf("upsert should update same record, ids: %q vs %q", first.ID, second.ID)
+	}
+	if second.Name != "Upsert Item Updated" || second.Slug != "upsert-item-updated" {
+		t.Fatalf("updated item = %#v", second)
+	}
+	if len(second.Translations) != 1 || second.Translations[0].Name != "Апсерт Предмет Обновлен" {
+		t.Fatalf("updated translations = %#v", second.Translations)
+	}
+}
+
 func newCatalogTestPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	t.Helper()
 

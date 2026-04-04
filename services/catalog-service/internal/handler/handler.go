@@ -8,6 +8,7 @@ import (
 
 type CatalogUseCase interface {
 	CreateItem(ctx context.Context, input model.CreateItemInput) (*model.Item, error)
+	UpsertItem(ctx context.Context, input model.CreateItemInput) (*model.Item, error)
 	UpdateItem(ctx context.Context, id string, input model.UpdateItemInput) (*model.Item, error)
 	DeleteItem(ctx context.Context, id string) error
 	GetItemByID(ctx context.Context, id string) (*model.Item, error)

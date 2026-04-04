@@ -62,6 +62,44 @@ func TestServiceCreateItem_DelegatesToRepository(t *testing.T) {
 	}
 }
 
+func TestServiceUpsertItem_DelegatesToRepository(t *testing.T) {
+	t.Parallel()
+
+	var got model.CreateItemInput
+	repo := stubRepository{
+		upsertItemFn: func(ctx context.Context, input model.CreateItemInput) (*model.Item, error) {
+			got = input
+			return &model.Item{
+				ID:         "item-1",
+				Game:       input.Game,
+				Source:     input.Source,
+				ExternalID: input.ExternalID,
+				Slug:       input.Slug,
+				Name:       input.Name,
+				IsActive:   true,
+			}, nil
+		},
+	}
+
+	svc := New(repo)
+	item, err := svc.UpsertItem(context.Background(), model.CreateItemInput{
+		Game:       "warframe",
+		Source:     "market",
+		ExternalID: "primed-continuity",
+		Slug:       "primed-continuity",
+		Name:       "Primed Continuity",
+	})
+	if err != nil {
+		t.Fatalf("upsert item: %v", err)
+	}
+	if item == nil || item.ID == "" {
+		t.Fatalf("expected upserted item with id, got %#v", item)
+	}
+	if got.Game != "warframe" || got.Source != "market" || got.ExternalID != "primed-continuity" {
+		t.Fatalf("repository input = %#v", got)
+	}
+}
+
 func TestServiceUpdateItem_DelegatesToRepository(t *testing.T) {
 	t.Parallel()
 
@@ -203,6 +241,7 @@ func TestServiceSearchItems_DefaultsToActiveOnlyAndDelegates(t *testing.T) {
 
 type stubRepository struct {
 	createItemFn     func(ctx context.Context, input model.CreateItemInput) (*model.Item, error)
+	upsertItemFn     func(ctx context.Context, input model.CreateItemInput) (*model.Item, error)
 	updateItemFn     func(ctx context.Context, id string, input model.UpdateItemInput) (*model.Item, error)
 	deactivateItemFn func(ctx context.Context, id string) error
 	getItemByIDFn    func(ctx context.Context, id string) (*model.Item, error)
@@ -215,6 +254,13 @@ func (s stubRepository) CreateItem(ctx context.Context, input model.CreateItemIn
 		return nil, errors.New("unexpected CreateItem call")
 	}
 	return s.createItemFn(ctx, input)
+}
+
+func (s stubRepository) UpsertItem(ctx context.Context, input model.CreateItemInput) (*model.Item, error) {
+	if s.upsertItemFn == nil {
+		return nil, errors.New("unexpected UpsertItem call")
+	}
+	return s.upsertItemFn(ctx, input)
 }
 
 func (s stubRepository) UpdateItem(ctx context.Context, id string, input model.UpdateItemInput) (*model.Item, error) {

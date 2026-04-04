@@ -43,6 +43,36 @@ func (h *Handler) CreateItem(c *gin.Context) {
 	c.JSON(http.StatusCreated, model.ItemResponse{Item: *item})
 }
 
+func (h *Handler) UpsertItem(c *gin.Context) {
+	var req model.CreateItemRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	item, err := h.catalogService.UpsertItem(c.Request.Context(), model.CreateItemInput{
+		Game:         req.Game,
+		Source:       req.Source,
+		ExternalID:   req.ExternalID,
+		Slug:         req.Slug,
+		Name:         req.Name,
+		Description:  req.Description,
+		ImageURL:     req.ImageURL,
+		Translations: req.Translations,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidInput):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid item input"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "upsert item failed"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, model.ItemResponse{Item: *item})
+}
+
 func (h *Handler) UpdateItem(c *gin.Context) {
 	var req model.UpdateItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
