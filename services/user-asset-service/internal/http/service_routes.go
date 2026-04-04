@@ -6,10 +6,15 @@ import (
 )
 
 func registerServiceRoutes(r *gin.Engine, h *handler.Handler) {
-	r.GET("/watchlist", h.Placeholder("watchlist_list"))
-	r.POST("/watchlist", h.Placeholder("watchlist_create"))
-	r.DELETE("/watchlist/:id", h.Placeholder("watchlist_delete"))
-	r.GET("/recent", h.Placeholder("recent_list"))
-	r.GET("/preferences", h.Placeholder("preferences_get"))
-	r.PUT("/preferences", h.Placeholder("preferences_update"))
+	r.POST("/users", h.CreateUser)
+	r.GET("/users/:id", h.GetUser)
+
+	r.GET("/watchlist", h.GetWatchlist)
+	r.POST("/watchlist", h.CreateWatchlist)
+	r.DELETE("/watchlist/:id", h.DeleteWatchlist)
+
+	r.GET("/recent", h.GetRecent)
+
+	r.GET("/preferences", h.GetPreferences)
+	r.PUT("/preferences", h.UpdatePreferences)
 }

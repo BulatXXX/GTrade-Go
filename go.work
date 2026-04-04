@@ -1,11 +1,12 @@
 go 1.23.0
 
 use (
+	./shared/httpmiddleware
 	./services/api-gateway
+	./services/api-integration-service
 	./services/auth-service
-	./services/user-asset-service
-	./services/marketplace-integration-service
 	./services/catalog-service
 	./services/notification-service
+	./services/user-asset-service
 	./tools/catalog-importer
 )

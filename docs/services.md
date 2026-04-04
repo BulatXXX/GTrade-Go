@@ -6,7 +6,7 @@
 - Основные endpoint'ы:
   - `GET /health`
   - группы маршрутов: `/api/auth`, `/api/users`, `/api/items`, `/api/notifications`
-- Что хранит: не хранит состояние в текущем skeleton.
+
 
 ## auth-service
 - Назначение: аутентификация и account lifecycle.
@@ -34,7 +34,7 @@
   - `PUT /preferences`
 - Что хранит: `watchlist_items`.
 
-## marketplace-integration-service
+## api-integration-service
 - Назначение: интеграция с внешними маркетплейсами и адаптеры.
 - Порт: `8083`
 - Основные endpoint'ы:

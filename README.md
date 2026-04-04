@@ -7,13 +7,14 @@ GTrade Data System — платформа управления данными в
 - `services/` — Go-микросервисы
 - `tools/` — Go CLI-утилиты
 - `docs/` — документация по архитектуре и сервисам
+- `deploy/` — docker-compose и локальные deploy-артефакты
 
 ## Сервисы
 
 - `api-gateway`
 - `auth-service`
 - `user-asset-service`
-- `marketplace-integration-service`
+- `api-integration-service`
 - `catalog-service`
 - `notification-service`
 - `tools/catalog-importer`
@@ -32,7 +33,7 @@ GTrade Data System — платформа управления данными в
 1. Скопировать env-файл:
 
 ```bash
-cp .env.example .env
+cp deploy/.env.example deploy/.env
 ```
 
 2. Поднять инфраструктуру:
@@ -61,7 +62,7 @@ make down
 - api-gateway: `8080`
 - auth-service: `8081`
 - user-asset-service: `8082`
-- marketplace-integration-service: `8083`
+- api-integration-service: `8083`
 - catalog-service: `8084`
 - notification-service: `8085`
 
@@ -72,7 +73,7 @@ make down
 - catalog DB: `5436`
 - notification DB: `5437`
 
-`api-gateway` и `marketplace-integration-service` в текущем skeleton работают без собственной БД.
+`api-gateway` и `api-integration-service` в текущем skeleton работают без собственной БД.
 
 ## Что уже реализовано
 
@@ -80,17 +81,16 @@ make down
 - единый каркас: конфиг из env, логирование, HTTP, repository layer
 - health endpoint во всех сервисах
 - заглушки endpoint'ов по доменам
-- middleware логирования запросов
-- JWT middleware-заглушка в `api-gateway`
+- единый shared middleware: request id, logging, JWT auth validation
 - абстракции адаптеров маркетплейсов
 - абстракции провайдеров уведомлений (mock + resend skeleton)
-- docker-compose для локальной разработки на Mac
+- deploy-папка с docker-compose для локальной разработки на Mac
 
 ## Что пока заглушка
 
 - реальная бизнес-логика
-- реальная JWT-аутентификация (выдача/проверка токенов)
 - реальный reverse proxy / service client flow в gateway
+- полное покрытие защищенных внутренних route'ов auth middleware
 - интеграции с внешними API маркетплейсов
 - полноценная интеграция с Resend
 - frontend вынесен в отдельный репозиторий

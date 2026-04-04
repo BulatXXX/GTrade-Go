@@ -33,7 +33,7 @@ func Run(ctx context.Context) error {
 	}
 
 	h := handler.New(cfg.ServiceName)
-	r := httpserver.NewRouter(logger, h)
+	r := httpserver.NewRouter(logger, h, cfg.JWTSecret)
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),

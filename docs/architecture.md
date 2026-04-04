@@ -9,7 +9,7 @@
 ## user-asset-service
 Сервис пользовательских активов: watchlist, недавние данные, предпочтения.
 
-## marketplace-integration-service
+## api-integration-service
 Слой интеграции с внешними торговыми площадками через адаптеры (`warframe`, `eve`, `tarkov`). В текущем skeleton работает без БД.
 
 ## catalog-service
@@ -23,3 +23,8 @@
 
 ## Хранилища
 Отдельные БД PostgreSQL подключены только там, где в skeleton уже есть данные: auth, user-asset, catalog, notification.
+
+Middleware:
+- request_id
+- logging
+- auth

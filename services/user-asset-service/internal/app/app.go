@@ -12,6 +12,7 @@ import (
 	"gtrade/services/user-asset-service/internal/handler"
 	httpserver "gtrade/services/user-asset-service/internal/http"
 	"gtrade/services/user-asset-service/internal/repository"
+	"gtrade/services/user-asset-service/internal/service"
 )
 
 func Run(ctx context.Context) error {
@@ -19,20 +20,21 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
+	if cfg.DatabaseURL == "" {
+		return fmt.Errorf("DATABASE_URL is required for user-asset-service")
+	}
 
 	logger := zerolog.New(os.Stdout).With().Timestamp().Str("service", cfg.ServiceName).Logger()
 
-	if cfg.DatabaseURL != "" {
-		pool, err := repository.NewPostgresPool(ctx, cfg.DatabaseURL)
-		if err != nil {
-			return fmt.Errorf("connect postgres: %w", err)
-		}
-		defer pool.Close()
-	} else {
-		logger.Warn().Msg("DATABASE_URL is empty, postgres connection skipped")
+	pool, err := repository.NewPostgresPool(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return fmt.Errorf("connect postgres: %w", err)
 	}
+	defer pool.Close()
 
-	h := handler.New(cfg.ServiceName)
+	repo := repository.NewUserAssetRepository(pool)
+	userAssetService := service.NewUserAssetService(repo)
+	h := handler.New(cfg.ServiceName, userAssetService)
 	r := httpserver.NewRouter(logger, h)
 
 	srv := &http.Server{
