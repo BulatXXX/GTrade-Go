@@ -44,9 +44,12 @@
 
 ### user-asset-service
 
-Уже близок к самостоятельному MVP-состоянию:
+Уже доведен до хорошего user-state MVP-состояния:
 
-- user/watchlist/preferences CRUD
+- profile / watchlist / preferences CRUD
+- строковый `item_id`, совместимый с `catalog-service`
+- валидация и enrichment watchlist через `catalog-service`
+- unit / smoke / integration tests
 
 ### catalog-service
 
@@ -111,11 +114,20 @@
 
 ### Приоритет 3. user-asset-service
 
-Нужно довести:
+Что уже сделано:
 
 - полный минимальный watchlist flow
-- понятный сценарий user profile/preferences
-- при необходимости связку watchlist с item ids из каталога
+- понятный profile/preferences flow
+- связка watchlist с item ids из каталога
+- profile fields: `display_name`, `avatar_url`, `bio`
+- integration tests с реальной PostgreSQL
+- OpenAPI/Swagger документация
+
+Что осталось:
+
+- решить, нужны ли отдельные list entity кроме одного watchlist
+- подготовить auth-aware flow, чтобы убрать `user_id` из query/body после подключения gateway/auth
+- при необходимости добавить более богатый enrichment item data или pricing summary
 
 Цель:
 
@@ -130,6 +142,7 @@
 ### Уже сделано
 
 - `auth-service -> notification-service`
+- `user-asset-service -> catalog-service`
 
 ### Следующие кандидаты
 
@@ -192,22 +205,20 @@
 
 ## Что делать следующим практически
 
-Если идти в правильном порядке, следующий шаг сейчас не `api-gateway`.
+Если идти в правильном порядке, следующий шаг сейчас не `api-gateway`, а расширение уже собранных сервисных связок.
 
 Следующий шаг:
 
-1. выбрать один из оставшихся доменных сервисов как следующий MVP-фокус
-2. довести его до самостоятельного рабочего состояния
-3. покрыть его unit/integration тестами
-4. потом связать его с соседним сервисом
+1. добить прямые интеграции вокруг `catalog-service` и `api-integration-service`
+2. определить, нужен ли отдельный sync flow для обновления локального каталога и historical pricing snapshots
+3. при необходимости добавить internal auth для внутренних endpoint'ов и sync задач
+4. после этого подключать `api-gateway` как внешний фасад
 
 Рекомендуемый порядок:
 
-1. `api-integration-service`
-2. `user-asset-service`
-3. межсервисная интеграция вокруг уже готового `catalog-service`
-4. потом межсервисная интеграция этих частей
-5. потом `api-gateway`
+1. `catalog-service <-> api-integration-service`
+2. дополнительные runtime/sync сценарии поверх `user-asset-service`
+3. потом `api-gateway`
 
 ## Какой MVP-контур хотим получить в итоге
 
@@ -261,7 +272,7 @@ make auth-notification-e2e-test
 
 То есть:
 
-1. доводим оставшиеся сервисы
-2. собираем их прямые интеграции
+1. расширяем уже собранные сервисы и их прямые интеграции
+2. собираем недостающие service-to-service связи
 3. подключаем `api-gateway`
 4. только потом глубоко полируем систему

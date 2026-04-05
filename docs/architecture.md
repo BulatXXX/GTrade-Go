@@ -7,7 +7,7 @@
 Сервис аутентификации и account flow: регистрация, логин, refresh, сброс пароля, подтверждение email. Внутри владеет пользователями и одноразовыми токенами, а для email delivery вызывает `notification-service` по внутреннему HTTP.
 
 ## user-asset-service
-Сервис пользовательских активов: watchlist, недавние данные, предпочтения. Имеет рабочий CRUD-контур поверх PostgreSQL.
+Сервис пользовательского состояния: cloud watchlist, профиль и preferences. Работает поверх PostgreSQL, а для watchlist связывается с `catalog-service`, чтобы валидировать item ids и enrich'ить ответы базовой item metadata.
 
 ## api-integration-service
 Слой runtime-интеграции с внешними торговыми площадками через адаптеры (`warframe`, `eve`, `tarkov`). Работает без собственной БД, выбирает provider по `game`, нормализует item data и pricing data в единый DTO. Для `tarkov` дополнительно учитывает `game_mode=regular|pve`. Для `eve` поиск должен оставаться в локальном `catalog-service`, а этот сервис отвечает за внешнюю item card и pricing fetch.
@@ -53,3 +53,11 @@ Middleware:
 3. provider ходит во внешний API (`warframe.market`, `ESI`, `tarkov.dev`)
 4. ответ приводится к общему item/pricing контракту
 5. для `tarkov` один и тот же `item id` может давать разные цены в `regular` и `pve`
+
+Дополнительно уже есть рабочий user-state flow:
+
+1. клиент создает или обновляет профиль в `user-asset-service`
+2. клиент добавляет предмет в watchlist по локальному `catalog item id`
+3. `user-asset-service` валидирует item через `catalog-service`
+4. `user-asset-service` хранит watchlist и preferences в PostgreSQL
+5. при чтении watchlist сервис обогащает ответ item summary из каталога

@@ -110,7 +110,8 @@ make auth-notification-e2e-test
 - `auth-service` с рабочими flow: register, login, refresh, password reset, email verification
 - интеграция `auth-service -> notification-service`
 - `notification-service` с PostgreSQL outbox, `mock` provider и рабочей интеграцией с Resend
-- `user-asset-service` с базовым CRUD для user/watchlist/preferences
+- `user-asset-service` с рабочим cloud-state flow для profile/watchlist/preferences
+- связка `user-asset-service <-> catalog-service` для watchlist validation/enrichment
 - `catalog-service` с рабочими CRUD/search endpoint'ами, PostgreSQL persistence и локализациями
 - `catalog-service` с ingestion endpoint `POST /items/upsert` для внешнего наполнения каталога
 - локальный поиск по каталогу через PostgreSQL по `name` и `translations.name`
@@ -140,7 +141,13 @@ make auth-notification-e2e-test
 - `docs/services.md` — краткая сводка по endpoint'ам и состоянию сервисов
 - `docs/roadmap.md` — общий roadmap и ближайшие приоритеты
 - `services/auth-service/progress.md` — актуальный статус auth flow
+- `services/auth-service/docs/openapi.yaml` — OpenAPI `auth-service`
 - `services/notification-service/progress.md` — актуальный статус notification flow
+- `services/notification-service/docs/openapi.yaml` — OpenAPI `notification-service`
 - `services/catalog-service/progress.md` — актуальный статус catalog flow
+- `services/catalog-service/docs/openapi.yaml` — OpenAPI `catalog-service`
 - `services/api-integration-service/README.md` — актуальный статус integration flow
+- `services/api-integration-service/docs/openapi.yaml` — OpenAPI `api-integration-service`
+- `services/user-asset-service/README.md` — актуальный статус user-state flow
+- `services/user-asset-service/docs/openapi.yaml` — OpenAPI `user-asset-service`
 - `tools/catalog-importer/README.md` — гайд по импорту `warframe`, `eve`, `tarkov`

@@ -27,18 +27,25 @@
 ## user-asset-service
 - Назначение: watchlist и пользовательские настройки.
 - Порт: `8082`
-- Текущее состояние: базовый CRUD поверх PostgreSQL.
+- Текущее состояние: рабочий cloud-state service поверх PostgreSQL.
 - Основные endpoint'ы:
   - `GET /health`
   - `POST /users`
   - `GET /users/:id`
+  - `PUT /users/:id`
   - `GET /watchlist`
   - `POST /watchlist`
   - `DELETE /watchlist/:id`
   - `GET /recent`
   - `GET /preferences`
   - `PUT /preferences`
-- Что хранит: `watchlist_items`.
+- Что хранит: `user_profiles`, `watchlist_items`, `user_preferences`.
+- Особенность:
+  - хранит профиль пользователя (`display_name`, `avatar_url`, `bio`)
+  - watchlist хранит строковый `item_id`, совместимый с `catalog-service`
+  - при `POST /watchlist` валидирует item через `catalog-service`
+  - в ответах `GET /users/:id`, `GET /watchlist`, `GET /recent` enrich'ит item summary из `catalog-service`
+  - есть unit, smoke и integration tests
 
 ## api-integration-service
 - Назначение: интеграция с внешними маркетплейсами и адаптеры.
