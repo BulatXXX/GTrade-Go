@@ -47,16 +47,20 @@ func TestRouterSmoke(t *testing.T) {
 			if query.Game == "" {
 				return nil, service.ErrInvalidInput
 			}
-			return &model.Item{ID: query.ID, Game: query.Game, Name: "stub"}, nil
+			return &model.Item{ID: query.ID, Game: query.Game, GameMode: query.GameMode, Name: "stub"}, nil
 		},
 		priceFn: func(ctx context.Context, query model.GetPricingQuery) (*model.PriceSnapshot, error) {
 			if query.Game == "" {
+				return nil, service.ErrInvalidInput
+			}
+			if query.Game == "tarkov" && query.GameMode == "" {
 				return nil, service.ErrInvalidInput
 			}
 			current := 10120.0
 			return &model.PriceSnapshot{
 				ItemID:     query.ID,
 				Game:       query.Game,
+				GameMode:   query.GameMode,
 				Source:     "tarkov-dev",
 				Currency:   "RUB",
 				MarketKind: "aggregated_market",
@@ -76,7 +80,7 @@ func TestRouterSmoke(t *testing.T) {
 		{name: "health", method: http.MethodGet, path: "/health", wantStatus: http.StatusOK, wantField: "status"},
 		{name: "search", method: http.MethodGet, path: "/search?game=tarkov&q=ak", wantStatus: http.StatusOK, wantField: "items"},
 		{name: "get item", method: http.MethodGet, path: "/items/5448?game=tarkov", wantStatus: http.StatusOK, wantField: "item"},
-		{name: "get price", method: http.MethodGet, path: "/items/5448/top-price?game=tarkov", wantStatus: http.StatusOK, wantField: "price"},
+		{name: "get price", method: http.MethodGet, path: "/items/5448/top-price?game=tarkov&game_mode=pve", wantStatus: http.StatusOK, wantField: "price"},
 		{name: "search invalid", method: http.MethodGet, path: "/search?q=ak", wantStatus: http.StatusBadRequest, wantField: "error"},
 	}
 

@@ -24,10 +24,11 @@ func (h *Handler) Search(c *gin.Context) {
 	}
 
 	items, err := h.service.SearchItems(c.Request.Context(), model.SearchItemsQuery{
-		Game:   c.Query("game"),
-		Query:  c.Query("q"),
-		Limit:  limit,
-		Offset: offset,
+		Game:     c.Query("game"),
+		GameMode: c.Query("game_mode"),
+		Query:    c.Query("q"),
+		Limit:    limit,
+		Offset:   offset,
 	})
 	if err != nil {
 		writeServiceError(c, err, "search items failed")
@@ -43,8 +44,9 @@ func (h *Handler) Search(c *gin.Context) {
 
 func (h *Handler) GetByID(c *gin.Context) {
 	item, err := h.service.GetItem(c.Request.Context(), model.GetItemQuery{
-		Game: c.Query("game"),
-		ID:   c.Param("id"),
+		Game:     c.Query("game"),
+		GameMode: c.Query("game_mode"),
+		ID:       c.Param("id"),
 	})
 	if err != nil {
 		writeServiceError(c, err, "get item failed")
@@ -56,8 +58,9 @@ func (h *Handler) GetByID(c *gin.Context) {
 
 func (h *Handler) GetTopPrice(c *gin.Context) {
 	price, err := h.service.GetPricing(c.Request.Context(), model.GetPricingQuery{
-		Game: c.Query("game"),
-		ID:   c.Param("id"),
+		Game:     c.Query("game"),
+		GameMode: c.Query("game_mode"),
+		ID:       c.Param("id"),
 	})
 	if err != nil {
 		writeServiceError(c, err, "get price failed")

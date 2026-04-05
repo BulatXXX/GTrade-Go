@@ -43,6 +43,7 @@ func (s *Service) SearchItems(ctx context.Context, query model.SearchItemsQuery)
 	if query.Offset < 0 {
 		return nil, ErrInvalidInput
 	}
+	query.GameMode = normalizeGameMode(query.Game, query.GameMode)
 
 	provider, err := s.providerFor(query.Game)
 	if err != nil {
@@ -61,6 +62,7 @@ func (s *Service) GetItem(ctx context.Context, query model.GetItemQuery) (*model
 	if strings.TrimSpace(query.Game) == "" || strings.TrimSpace(query.ID) == "" {
 		return nil, ErrInvalidInput
 	}
+	query.GameMode = normalizeGameMode(query.Game, query.GameMode)
 
 	provider, err := s.providerFor(query.Game)
 	if err != nil {
@@ -79,6 +81,7 @@ func (s *Service) GetPricing(ctx context.Context, query model.GetPricingQuery) (
 	if strings.TrimSpace(query.Game) == "" || strings.TrimSpace(query.ID) == "" {
 		return nil, ErrInvalidInput
 	}
+	query.GameMode = normalizeGameMode(query.Game, query.GameMode)
 
 	provider, err := s.providerFor(query.Game)
 	if err != nil {
@@ -110,4 +113,16 @@ func wrapProviderError(err error) error {
 	default:
 		return fmt.Errorf("%w: %v", ErrUpstreamFailed, err)
 	}
+}
+
+func normalizeGameMode(game, gameMode string) string {
+	if strings.ToLower(strings.TrimSpace(game)) != "tarkov" {
+		return strings.TrimSpace(gameMode)
+	}
+
+	mode := strings.ToLower(strings.TrimSpace(gameMode))
+	if mode == "" {
+		return "regular"
+	}
+	return mode
 }

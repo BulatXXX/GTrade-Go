@@ -36,7 +36,7 @@ func TestServiceSearchItems_DelegatesToProvider(t *testing.T) {
 	svc := New(stubProvider{
 		game: "tarkov",
 		searchFn: func(ctx context.Context, query model.SearchItemsQuery) ([]model.Item, error) {
-			if query.Game != "tarkov" || query.Query != "ak" || query.Limit != 20 {
+			if query.Game != "tarkov" || query.Query != "ak" || query.Limit != 20 || query.GameMode != "regular" {
 				t.Fatalf("unexpected query: %#v", query)
 			}
 			return []model.Item{{ID: "1", Game: "tarkov", Name: "AK"}}, nil
@@ -95,5 +95,29 @@ func TestServiceGetPricing_ValidatesInput(t *testing.T) {
 	_, err := svc.GetPricing(context.Background(), model.GetPricingQuery{})
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Fatalf("error = %v, want %v", err, ErrInvalidInput)
+	}
+}
+
+func TestServiceGetPricing_DefaultsTarkovGameModeToRegular(t *testing.T) {
+	t.Parallel()
+
+	svc := New(stubProvider{
+		game:      "tarkov",
+		searchFn:  func(ctx context.Context, query model.SearchItemsQuery) ([]model.Item, error) { return nil, nil },
+		getItemFn: func(ctx context.Context, query model.GetItemQuery) (*model.Item, error) { return nil, nil },
+		priceFn: func(ctx context.Context, query model.GetPricingQuery) (*model.PriceSnapshot, error) {
+			if query.GameMode != "regular" {
+				t.Fatalf("game_mode = %q, want regular", query.GameMode)
+			}
+			return &model.PriceSnapshot{ItemID: query.ID, Game: query.Game, GameMode: query.GameMode}, nil
+		},
+	})
+
+	_, err := svc.GetPricing(context.Background(), model.GetPricingQuery{
+		Game: "tarkov",
+		ID:   "5448bd6b4bdc2dfc2f8b4569",
+	})
+	if err != nil {
+		t.Fatalf("GetPricing: %v", err)
 	}
 }

@@ -8,20 +8,23 @@ type HealthResponse struct {
 }
 
 type SearchItemsQuery struct {
-	Game   string
-	Query  string
-	Limit  int
-	Offset int
+	Game     string
+	GameMode string
+	Query    string
+	Limit    int
+	Offset   int
 }
 
 type GetItemQuery struct {
-	Game string
-	ID   string
+	Game     string
+	GameMode string
+	ID       string
 }
 
 type GetPricingQuery struct {
-	Game string
-	ID   string
+	Game     string
+	GameMode string
+	ID       string
 }
 
 type SearchItemsResponse struct {
@@ -41,6 +44,7 @@ type PriceResponse struct {
 type Item struct {
 	ID          string   `json:"id"`
 	Game        string   `json:"game"`
+	GameMode    string   `json:"game_mode,omitempty"`
 	Source      string   `json:"source"`
 	Name        string   `json:"name"`
 	Slug        string   `json:"slug,omitempty"`
@@ -54,6 +58,7 @@ type Item struct {
 type PriceSnapshot struct {
 	ItemID     string          `json:"item_id"`
 	Game       string          `json:"game"`
+	GameMode   string          `json:"game_mode,omitempty"`
 	Source     string          `json:"source"`
 	Currency   string          `json:"currency"`
 	MarketKind string          `json:"market_kind"`
