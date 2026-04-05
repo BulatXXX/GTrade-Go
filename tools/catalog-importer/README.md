@@ -8,8 +8,7 @@ CLI-утилита наполнения `catalog-service` данными из в
 
 - `warframe`
 - `eve`
-
-Для `tarkov` каркас источника создан, но fetch-логика еще не реализована.
+- `tarkov`
 
 ## Что делает утилита
 
@@ -92,6 +91,37 @@ CLI-утилита наполнения `catalog-service` данными из в
 
 Важно: `markets/prices` сейчас нужен только как источник списка `type_id`. Цены из него пока не сохраняются, потому что текущий `catalog-service` хранит item metadata, а не market snapshots.
 
+## Tarkov
+
+Источник `tarkov` использует:
+
+- GraphQL endpoint: `POST https://api.tarkov.dev/graphql`
+- query `items(lang: <lang>, gameMode: regular, offset: <offset>, limit: <limit>)`
+
+Что импортируется:
+
+- `id` как `external_id`
+- `name`
+- `description`
+- `image512pxLink` как основной `image_url`
+- `iconLink` как fallback для `image_url`
+- локализованные `name`
+- локализованные `description`
+
+Что пока не импортируется:
+
+- `avg24hPrice`
+- дополнительные source-specific поля вроде `types`, `height`, `width`
+- отдельные pricing snapshots
+
+Для `tarkov` используется:
+
+- `game=tarkov`
+- `source=tarkov-dev`
+- `slug=item.id`
+
+Важно: текущий importer берет metadata для `gameMode: regular`. Для `tarkov` цены и сегменты рынка лучше отделять от каталога и обрабатывать отдельным pricing flow.
+
 ## Пошаговый гайд
 
 1. Подготовить окружение и поднять `catalog-service`:
@@ -151,6 +181,18 @@ GOCACHE=/tmp/gocache-importer go run ./cmd/catalog-importer -source eve -limit 1
 GOCACHE=/tmp/gocache-importer go run ./cmd/catalog-importer -source eve -language ru -limit 10 -catalog-url http://localhost:8084
 ```
 
+Короткая проверка Tarkov:
+
+```bash
+GOCACHE=/tmp/gocache-importer go run ./cmd/catalog-importer -source tarkov -limit 10 -catalog-url http://localhost:8084
+```
+
+Короткая проверка Tarkov с локализацией:
+
+```bash
+GOCACHE=/tmp/gocache-importer go run ./cmd/catalog-importer -source tarkov -language ru -limit 10 -catalog-url http://localhost:8084
+```
+
 5. Проверить результат через API.
 
 Список:
@@ -175,6 +217,12 @@ curl -sS 'http://localhost:8084/items/search?q=%D0%BF%D1%80%D0%B0%D0%B9%D0%BC&ga
 
 ```bash
 curl -sS 'http://localhost:8084/items/search?q=plagioclase&game=eve&language=ru&limit=20&offset=0'
+```
+
+Поиск по Tarkov:
+
+```bash
+curl -sS 'http://localhost:8084/items/search?q=Colt%20M4A1&game=tarkov&language=ru&limit=20&offset=0'
 ```
 
 Получение локализованной карточки:
@@ -261,6 +309,18 @@ go run ./cmd/catalog-importer -source eve -limit 50
 go run ./cmd/catalog-importer -source eve -language ru -limit 50
 ```
 
+Импорт Tarkov:
+
+```bash
+go run ./cmd/catalog-importer -source tarkov -limit 50
+```
+
+Импорт Tarkov с локализацией:
+
+```bash
+go run ./cmd/catalog-importer -source tarkov -language ru -limit 50
+```
+
 Сухой прогон без записи в каталог:
 
 ```bash
@@ -287,6 +347,7 @@ go run ./cmd/catalog-importer -source warframe -catalog-url http://localhost:808
 - `warframe` импортирует item metadata и локализации, но не market orders
 - `eve` импортирует item metadata и локализации, но не сохраняет market prices
 - `eve` использует `markets/prices` только как источник списка `type_id`
+- `tarkov` импортирует item metadata и локализации, но не сохраняет `avg24hPrice`
+- `tarkov` сейчас импортируется только для `gameMode: regular`
 - локализация появляется в API только после прогона с соответствующим `-language`
-- `tarkov` пока не реализован
 - утилита зависит от доступности поднятого `catalog-service`

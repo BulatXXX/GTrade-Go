@@ -52,16 +52,23 @@
 - Что хранит: не хранит состояние в текущем skeleton.
 
 ## catalog-service
-- Назначение: каталог предметов и цены.
+- Назначение: канонический каталог предметов, локализации и локальный поиск.
 - Порт: `8084`
-- Текущее состояние: в основном placeholder.
+- Текущее состояние: рабочий metadata-service с PostgreSQL.
 - Основные endpoint'ы:
   - `GET /health`
+  - `POST /items`
   - `GET /items`
   - `GET /items/:id`
   - `GET /items/search`
   - `POST /items/upsert`
-- Что хранит: `items`, `prices`.
+  - `PUT /items/:id`
+  - `DELETE /items/:id`
+- Что хранит: `items`, `item_translations`, `prices`.
+- Особенность:
+  - поиск идет по локальной PostgreSQL, а не по внешним API
+  - при `language=...` ищет по `item_translations.name` и возвращает `localized_name` / `localized_description`
+  - `POST /items/upsert` используется `catalog-importer` для идемпотентного наполнения каталога
 
 ## notification-service
 - Назначение: отправка уведомлений и интеграция с email-провайдерами.
@@ -79,6 +86,12 @@
 - Команда:
   - `catalog-importer -source warframe|eve|tarkov`
 - Что хранит: напрямую не хранит, пишет через repository abstraction.
+- Текущее состояние: рабочий importer для `warframe`, `eve`, `tarkov`.
+- Особенность:
+  - импорт идет потоково по одному предмету
+  - базовые `en` поля пишутся в `items`
+  - `ru` локализации пишутся в `item_translations`
+  - для `tarkov` используется GraphQL API `api.tarkov.dev`
 
 ## Реальный системный тест сейчас
 

@@ -111,6 +111,11 @@ make auth-notification-e2e-test
 - интеграция `auth-service -> notification-service`
 - `notification-service` с PostgreSQL outbox, `mock` provider и рабочей интеграцией с Resend
 - `user-asset-service` с базовым CRUD для user/watchlist/preferences
+- `catalog-service` с рабочими CRUD/search endpoint'ами, PostgreSQL persistence и локализациями
+- `catalog-service` с ingestion endpoint `POST /items/upsert` для внешнего наполнения каталога
+- локальный поиск по каталогу через PostgreSQL по `name` и `translations.name`
+- `tools/catalog-importer` с рабочим импортом `warframe`, `eve`, `tarkov`
+- полный импорт metadata и `ru` локализаций для `warframe`, `eve`, `tarkov` уже подтвержден live-прогонами
 - unit, integration и live e2e тесты для связки `auth-service -> notification-service`
 - deploy-папка с docker-compose для локальной разработки на Mac
 
@@ -118,9 +123,7 @@ make auth-notification-e2e-test
 
 - реальный reverse proxy / service client flow в gateway
 - полное покрытие защищенных внутренних route'ов auth middleware
-- интеграции с внешними API маркетплейсов
-- большая часть `catalog-service`
-- большая часть `api-integration-service`
+- значительная часть `api-integration-service`
 - значительная часть `api-gateway`
 - frontend вынесен в отдельный репозиторий
 
@@ -136,3 +139,5 @@ make auth-notification-e2e-test
 - `docs/roadmap.md` — общий roadmap и ближайшие приоритеты
 - `services/auth-service/progress.md` — актуальный статус auth flow
 - `services/notification-service/progress.md` — актуальный статус notification flow
+- `services/catalog-service/progress.md` — актуальный статус catalog flow
+- `tools/catalog-importer/README.md` — гайд по импорту `warframe`, `eve`, `tarkov`

@@ -48,6 +48,15 @@
 
 - user/watchlist/preferences CRUD
 
+### catalog-service
+
+Уже доведен до самостоятельного metadata-MVP-состояния:
+
+- CRUD и upsert предметов
+- локальный поиск по каталогу
+- локализации через `item_translations`
+- рабочий importer flow для `warframe`, `eve`, `tarkov`
+
 ## Этап 1. Довести оставшиеся сервисы до самостоятельного MVP
 
 Главная цель этапа:
@@ -56,16 +65,25 @@
 
 ### Приоритет 1. catalog-service
 
-Нужно сделать:
+Что уже сделано:
 
-- минимально рабочий `GET /items`
-- минимально рабочий `GET /items/:id`
-- минимально рабочий `GET /items/search`
-- базовую работу с `items` и `prices`
+- рабочие `POST /items`, `PUT /items/:id`, `DELETE /items/:id`
+- рабочие `GET /items`, `GET /items/:id`, `GET /items/search`
+- ingestion endpoint `POST /items/upsert`
+- PostgreSQL persistence для `items` и `item_translations`
+- локализованный поиск по `name` и `translations.name`
+- backup/restore команды
+- рабочий importer flow `warframe|eve|tarkov -> catalog-service`
 
-Цель:
+Что осталось:
 
-- получить самостоятельный сервис каталога, который уже реально отвечает за item data
+- HTTP tests для handler/router слоя
+- более строгая DTO-валидация
+- уточнение модели `prices`, если цены будут храниться внутри каталога
+
+Статус:
+
+- `catalog-service` уже доведен до самостоятельного MVP
 
 ### Приоритет 2. api-integration-service
 
@@ -173,9 +191,9 @@
 
 Рекомендуемый порядок:
 
-1. `catalog-service`
-2. `api-integration-service`
-3. `user-asset-service`
+1. `api-integration-service`
+2. `user-asset-service`
+3. межсервисная интеграция вокруг уже готового `catalog-service`
 4. потом межсервисная интеграция этих частей
 5. потом `api-gateway`
 
