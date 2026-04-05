@@ -3,10 +3,18 @@
 ## api-gateway
 - Назначение: внешний вход в API и маршрутизация запросов.
 - Порт: `8080`
-- Текущее состояние: placeholder, без реального proxy/service-client flow.
+- Текущее состояние: рабочий gateway-фасад без собственной БД.
 - Основные endpoint'ы:
   - `GET /health`
-  - группы маршрутов: `/api/auth`, `/api/users`, `/api/items`, `/api/notifications`
+  - группы маршрутов: `/api/auth`, `/api/users`, `/api/items`, `/api/market`, `/api/notifications`
+- Что хранит: не хранит состояние в текущем этапе.
+- Особенность:
+  - проксирует `auth-service` через `/api/auth/*`
+  - проксирует `user-asset-service` через `/api/users/*`
+  - проксирует `catalog-service` через `/api/items/*`
+  - проксирует `api-integration-service` через `/api/market/*`
+  - проксирует `notification-service` через `/api/notifications/*`
+  - защищает JWT-мидлварью `/api/users/*` и `/api/notifications/*`
 
 
 ## auth-service
@@ -57,6 +65,8 @@
   - `GET /items/:id`
   - `GET /items/:id/prices`
   - `GET /items/:id/top-price`
+  - `POST /internal/sync/item`
+  - `POST /internal/sync/search`
 - Что хранит: не хранит состояние в текущем этапе.
 - Особенность:
   - нормализует внешние item/pricing ответы в единый DTO
@@ -65,6 +75,7 @@
   - для `eve` получает item card и цены через `ESI`, а поиск должен идти через локальный `catalog-service`
   - `GET /items/:id/prices` возвращает полный normalized pricing snapshot
   - `GET /items/:id/top-price` возвращает сокращенный ответ с одним главным значением цены
+  - умеет синхронить item metadata в `catalog-service` через internal sync endpoint'ы
 
 ## catalog-service
 - Назначение: канонический каталог предметов, локализации и локальный поиск.

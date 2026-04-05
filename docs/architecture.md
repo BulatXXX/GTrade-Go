@@ -1,7 +1,7 @@
 # Архитектура
 
 ## api-gateway
-Единая точка входа во внешний API. Содержит route groups (`/api/auth`, `/api/users`, `/api/items`, `/api/notifications`), middleware логирования и JWT-заглушку. В текущем состоянии остается placeholder-слоем без реального reverse proxy / service client flow и без БД.
+Единая точка входа во внешний API. Работает как transport/facade слой без собственной БД и проксирует готовые сервисы: `/api/auth -> auth-service`, `/api/users -> user-asset-service`, `/api/items -> catalog-service`, `/api/market -> api-integration-service`, `/api/notifications -> notification-service`. JWT-проверка сейчас включена для защищенных групп `/api/users` и `/api/notifications`.
 
 ## auth-service
 Сервис аутентификации и account flow: регистрация, логин, refresh, сброс пароля, подтверждение email. Внутри владеет пользователями и одноразовыми токенами, а для email delivery вызывает `notification-service` по внутреннему HTTP.
@@ -10,7 +10,7 @@
 Сервис пользовательского состояния: cloud watchlist, профиль и preferences. Работает поверх PostgreSQL, а для watchlist связывается с `catalog-service`, чтобы валидировать item ids и enrich'ить ответы базовой item metadata.
 
 ## api-integration-service
-Слой runtime-интеграции с внешними торговыми площадками через адаптеры (`warframe`, `eve`, `tarkov`). Работает без собственной БД, выбирает provider по `game`, нормализует item data и pricing data в единый DTO. Для `tarkov` дополнительно учитывает `game_mode=regular|pve`. Для `eve` поиск должен оставаться в локальном `catalog-service`, а этот сервис отвечает за внешнюю item card и pricing fetch.
+Слой runtime-интеграции с внешними торговыми площадками через адаптеры (`warframe`, `eve`, `tarkov`). Работает без собственной БД, выбирает provider по `game`, нормализует item data и pricing data в единый DTO. Для `tarkov` дополнительно учитывает `game_mode=regular|pve`. Для `eve` поиск должен оставаться в локальном `catalog-service`, а этот сервис отвечает за внешнюю item card и pricing fetch. Дополнительно сервис умеет через internal sync endpoint'ы обновлять item metadata в `catalog-service`.
 
 ## catalog-service
 Канонический каталог предметов: CRUD, поиск, локализации, ingestion через `POST /items/upsert`. Работает поверх PostgreSQL и уже используется как локальный source of truth для item metadata.
@@ -54,6 +54,13 @@ Middleware:
 4. ответ приводится к общему item/pricing контракту
 5. для `tarkov` один и тот же `item id` может давать разные цены в `regular` и `pve`
 
+Дополнительно уже есть рабочий sync flow между integration и catalog:
+
+1. внутренний клиент вызывает `api-integration-service`
+2. `api-integration-service` забирает item data у внешнего provider'а
+3. `api-integration-service` пишет нормализованный item в `catalog-service` через `POST /items/upsert`
+4. `catalog-service` обновляет базовую metadata и сохраняет существующие локализации, если sync не передал новые переводы
+
 Дополнительно уже есть рабочий user-state flow:
 
 1. клиент создает или обновляет профиль в `user-asset-service`
@@ -61,3 +68,10 @@ Middleware:
 3. `user-asset-service` валидирует item через `catalog-service`
 4. `user-asset-service` хранит watchlist и preferences в PostgreSQL
 5. при чтении watchlist сервис обогащает ответ item summary из каталога
+
+Дополнительно уже есть рабочий gateway flow:
+
+1. внешний клиент ходит в `api-gateway`
+2. gateway маршрутизирует auth/user/catalog/runtime-market запросы по разным upstream'ам
+3. gateway не смешивает локальный каталог и runtime pricing под одним route namespace
+4. доменная логика остается в нижележащих сервисах, а gateway остается транспортным фасадом

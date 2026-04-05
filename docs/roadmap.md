@@ -97,14 +97,16 @@
 - `eve` item / pricing
 - `tarkov` search / item / pricing
 - normalized endpoint'ы `GET /search`, `GET /items/:id`, `GET /items/:id/prices`, `GET /items/:id/top-price`
+- internal sync endpoint'ы `POST /internal/sync/item`, `POST /internal/sync/search`
 - поддержка `tarkov game_mode=regular|pve`
 - service/unit/provider/HTTP tests
+- рабочая связка `api-integration-service -> catalog-service` через `POST /items/upsert`
 
 Что осталось:
 
-- уточнить сценарий `catalog-service <-> api-integration-service`
-- решить, нужен ли sync flow для обновления локального каталога через integration layer
 - решить, нужен ли storage для historical pricing snapshots и analytics
+- решить, нужен ли scheduler/runner для регулярного catalog sync
+- определить backup flow перед full sync
 - при необходимости расширить pricing endpoint'ы под dashboard-specific метрики
 - добавить internal auth для будущих sync/internal endpoint'ов
 
@@ -143,11 +145,12 @@
 
 - `auth-service -> notification-service`
 - `user-asset-service -> catalog-service`
+- `api-integration-service -> catalog-service`
 
 ### Следующие кандидаты
 
-- `catalog-service <-> api-integration-service`
 - `user-asset-service <-> catalog-service` при необходимости
+- scheduler/runner и backup flow вокруг `api-integration-service -> catalog-service`
 
 Важно:
 
@@ -162,9 +165,8 @@
 
 Только после того как доменные сервисы уже рабочие:
 
-- перестать держать `api-gateway` placeholder-слоем
-- добавить реальные upstream/service clients
-- прокинуть публичные маршруты к уже готовым сервисам
+- gateway уже переведен из placeholder в рабочий facade/proxy слой
+- следующий шаг для него не базовое проксирование, а hardening и public API polishing
 
 Какой должна быть роль gateway:
 
@@ -205,20 +207,20 @@
 
 ## Что делать следующим практически
 
-Если идти в правильном порядке, следующий шаг сейчас не `api-gateway`, а расширение уже собранных сервисных связок.
+Если идти в правильном порядке, следующий шаг сейчас не базовый `api-gateway`, а hardening вокруг уже собранных связок.
 
 Следующий шаг:
 
-1. добить прямые интеграции вокруг `catalog-service` и `api-integration-service`
-2. определить, нужен ли отдельный sync flow для обновления локального каталога и historical pricing snapshots
-3. при необходимости добавить internal auth для внутренних endpoint'ов и sync задач
-4. после этого подключать `api-gateway` как внешний фасад
+1. определить, нужен ли scheduler/runner для регулярного sync и backup flow
+2. решить storage для historical pricing snapshots
+3. добавить internal auth для внутренних endpoint'ов и sync задач
+4. после этого полировать публичный API gateway
 
 Рекомендуемый порядок:
 
-1. `catalog-service <-> api-integration-service`
+1. scheduler/runner и backup flow вокруг `api-integration-service`
 2. дополнительные runtime/sync сценарии поверх `user-asset-service`
-3. потом `api-gateway`
+3. потом hardening `api-gateway`
 
 ## Какой MVP-контур хотим получить в итоге
 

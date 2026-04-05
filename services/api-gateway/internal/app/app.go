@@ -12,6 +12,7 @@ import (
 	"gtrade/services/api-gateway/internal/handler"
 	httpserver "gtrade/services/api-gateway/internal/http"
 	"gtrade/services/api-gateway/internal/repository"
+	"gtrade/services/api-gateway/internal/service"
 )
 
 func Run(ctx context.Context) error {
@@ -32,7 +33,14 @@ func Run(ctx context.Context) error {
 		logger.Warn().Msg("DATABASE_URL is empty, postgres connection skipped")
 	}
 
-	h := handler.New(cfg.ServiceName)
+	gatewayService := service.New(service.NewHTTPClient(), service.Targets{
+		AuthURL:         cfg.AuthServiceURL,
+		UserAssetURL:    cfg.UserAssetServiceURL,
+		CatalogURL:      cfg.CatalogServiceURL,
+		IntegrationURL:  cfg.IntegrationURL,
+		NotificationURL: cfg.NotificationURL,
+	})
+	h := handler.New(cfg.ServiceName, gatewayService)
 	r := httpserver.NewRouter(logger, h, cfg.JWTSecret)
 
 	srv := &http.Server{

@@ -98,7 +98,7 @@ make auth-notification-e2e-test
 - catalog DB: `5436`
 - notification DB: `5437`
 
-`api-gateway` и `api-integration-service` в текущем skeleton работают без собственной БД.
+`api-gateway` и `api-integration-service` работают без собственной БД.
 
 ## Что уже реализовано
 
@@ -125,9 +125,9 @@ make auth-notification-e2e-test
 
 ## Что пока заглушка
 
-- реальный reverse proxy / service client flow в gateway
 - полное покрытие защищенных внутренних route'ов auth middleware
-- значительная часть `api-gateway`
+- scheduler/runner для регулярного sync через `api-integration-service`
+- backup orchestration перед full catalog sync
 - frontend вынесен в отдельный репозиторий
 
 ## Подход к данным
