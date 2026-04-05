@@ -7,13 +7,14 @@ import (
 )
 
 type Config struct {
-	ServiceName  string
-	Port         int
-	DatabaseURL  string
-	CatalogURL   string
-	JWTSecret    string
-	LogLevel     string
-	ResendAPIKey string
+	ServiceName      string
+	Port             int
+	DatabaseURL      string
+	CatalogURL       string
+	InternalAPIToken string
+	JWTSecret        string
+	LogLevel         string
+	ResendAPIKey     string
 }
 
 func Load() (Config, error) {
@@ -23,13 +24,14 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		ServiceName:  getEnv("SERVICE_NAME", "service"),
-		Port:         port,
-		DatabaseURL:  os.Getenv("DATABASE_URL"),
-		CatalogURL:   getEnv("CATALOG_SERVICE_URL", "http://localhost:8084"),
-		JWTSecret:    getEnv("JWT_SECRET", "change-me"),
-		LogLevel:     getEnv("LOG_LEVEL", "info"),
-		ResendAPIKey: getEnv("RESEND_API_KEY", ""),
+		ServiceName:      getEnv("SERVICE_NAME", "service"),
+		Port:             port,
+		DatabaseURL:      os.Getenv("DATABASE_URL"),
+		CatalogURL:       getEnv("CATALOG_SERVICE_URL", "http://localhost:8084"),
+		InternalAPIToken: os.Getenv("INTERNAL_API_TOKEN"),
+		JWTSecret:        getEnv("JWT_SECRET", "change-me"),
+		LogLevel:         getEnv("LOG_LEVEL", "info"),
+		ResendAPIKey:     getEnv("RESEND_API_KEY", ""),
 	}
 
 	return cfg, nil

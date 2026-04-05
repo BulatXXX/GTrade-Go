@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	HeaderRequestID  = "X-Request-ID"
-	ContextRequestID = "request_id"
-	ContextJWTClaims = "jwt_claims"
+	HeaderRequestID    = "X-Request-ID"
+	HeaderInternalAuth = "X-Internal-Token"
+	ContextRequestID   = "request_id"
+	ContextJWTClaims   = "jwt_claims"
 )
 
 func RequestID() gin.HandlerFunc {
@@ -86,6 +87,28 @@ func RequireJWT(secret string) gin.HandlerFunc {
 		}
 
 		c.Set(ContextJWTClaims, claims)
+		c.Next()
+	}
+}
+
+func RequireInternalToken(token string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		expected := strings.TrimSpace(token)
+		if expected == "" {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal auth is not configured"})
+			return
+		}
+
+		got := strings.TrimSpace(c.GetHeader(HeaderInternalAuth))
+		if got == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "internal token is required"})
+			return
+		}
+		if got != expected {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid internal token"})
+			return
+		}
+
 		c.Next()
 	}
 }

@@ -89,3 +89,75 @@ func TestRequireJWT(t *testing.T) {
 		}
 	})
 }
+
+func TestRequireInternalToken(t *testing.T) {
+	t.Parallel()
+
+	const token = "test-internal-token"
+
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+	protected := r.Group("/internal")
+	protected.Use(RequireInternalToken(token))
+	protected.POST("/sync", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	t.Run("unauthorized without header", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPost, "/internal/sync", nil)
+		rec := httptest.NewRecorder()
+
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+		}
+	})
+
+	t.Run("unauthorized with wrong token", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPost, "/internal/sync", nil)
+		req.Header.Set(HeaderInternalAuth, "wrong")
+		rec := httptest.NewRecorder()
+
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+		}
+	})
+
+	t.Run("authorized with valid token", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPost, "/internal/sync", nil)
+		req.Header.Set(HeaderInternalAuth, token)
+		rec := httptest.NewRecorder()
+
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+	})
+}
+
+func TestRequireInternalToken_UnconfiguredFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+	protected := r.Group("/internal")
+	protected.Use(RequireInternalToken(""))
+	protected.POST("/sync", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/internal/sync", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+}

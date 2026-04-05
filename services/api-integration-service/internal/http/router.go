@@ -7,7 +7,7 @@ import (
 	"gtrade/services/api-integration-service/internal/handler"
 )
 
-func NewRouter(logger zerolog.Logger, h *handler.Handler) *gin.Engine {
+func NewRouter(logger zerolog.Logger, h *handler.Handler, internalToken string) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -15,7 +15,7 @@ func NewRouter(logger zerolog.Logger, h *handler.Handler) *gin.Engine {
 	r.Use(httpmiddleware.RequestLogger(logger))
 
 	r.GET("/health", h.Health)
-	registerServiceRoutes(r, h)
+	registerServiceRoutes(r, h, internalToken)
 
 	return r
 }

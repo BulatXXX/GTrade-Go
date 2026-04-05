@@ -219,6 +219,12 @@ paths:
     post:
       summary: Fetch one external item and upsert it into catalog-service
       tags: [internal-sync]
+      parameters:
+        - in: header
+          name: X-Internal-Token
+          required: true
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -254,6 +260,12 @@ paths:
     post:
       summary: Fetch one provider search page and upsert found items into catalog-service
       tags: [internal-sync]
+      parameters:
+        - in: header
+          name: X-Internal-Token
+          required: true
+          schema:
+            type: string
       requestBody:
         required: true
         content:

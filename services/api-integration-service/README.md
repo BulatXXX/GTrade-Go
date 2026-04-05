@@ -43,6 +43,7 @@
 - `GET /items/:id/top-price` возвращает только главное значение цены для совместимости и простых UI-сценариев
 - `POST /internal/sync/item` забирает внешний item и пишет его в `catalog-service`
 - `POST /internal/sync/search` берет страницу provider search results и пишет их в `catalog-service`
+- внутренние sync endpoint'ы требуют `X-Internal-Token`
 
 ## Как распределена ответственность
 
@@ -83,7 +84,6 @@
 - вынести OpenAPI/Swagger UI в удобный локальный просмотр
 - добавить более богатые analytics endpoint'ы при необходимости
 - решить, нужен ли storage для historical pricing snapshots
-- добавить internal auth для внутренних sync endpoint'ов
 - решить, нужен ли отдельный scheduler/worker для регулярного catalog sync
 
 ## Ключевые файлы

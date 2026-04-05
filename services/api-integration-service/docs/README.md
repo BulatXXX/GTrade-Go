@@ -13,6 +13,7 @@
 - нормализует ответы в единый DTO для фронта и соседних сервисов
 - умеет по внутренним endpoint'ам синхронить item metadata в `catalog-service`
 - не заменяет локальный `catalog-service`
+- защищает internal sync endpoint'ы заголовком `X-Internal-Token`
 
 ## Поддержанные сценарии
 
@@ -155,6 +156,7 @@ curl -sS 'http://localhost:8083/items/5448bd6b4bdc2dfc2f8b4569/prices?game=tarko
 ```bash
 curl -sS -X POST 'http://localhost:8083/internal/sync/item' \
   -H 'Content-Type: application/json' \
+  -H 'X-Internal-Token: <INTERNAL_API_TOKEN>' \
   -d '{"game":"warframe","id":"frost_prime_set"}'
 ```
 
@@ -163,6 +165,7 @@ curl -sS -X POST 'http://localhost:8083/internal/sync/item' \
 ```bash
 curl -sS -X POST 'http://localhost:8083/internal/sync/search' \
   -H 'Content-Type: application/json' \
+  -H 'X-Internal-Token: <INTERNAL_API_TOKEN>' \
   -d '{"game":"tarkov","q":"makarov","game_mode":"regular","limit":5,"offset":0}'
 ```
 
@@ -187,4 +190,4 @@ curl -sS -X POST 'http://localhost:8083/internal/sync/search' \
 - `eve` search сейчас не реализован как runtime endpoint поверх ESI
 - `top-price` для игр с агрегированной аналитикой является сокращением от полного pricing snapshot
 - нет persistence layer для historical price snapshots
-- нет internal auth для sync endpoint'ов
+- нужен единый rollout internal token по клиентам, которые будут вызывать sync endpoint'ы

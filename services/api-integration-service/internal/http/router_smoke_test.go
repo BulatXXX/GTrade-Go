@@ -85,7 +85,7 @@ func TestRouterSmoke(t *testing.T) {
 		syncSearchFn: func(ctx context.Context, query model.SyncSearchQuery) ([]model.SyncedCatalogItem, error) {
 			return []model.SyncedCatalogItem{{ID: "item_1", Game: query.Game, ExternalID: "5448", Name: "stub"}}, nil
 		},
-	}))
+	}), "test-internal-token")
 
 	tests := []struct {
 		name       string
@@ -143,7 +143,7 @@ func TestRouterSmoke_SyncEndpoints(t *testing.T) {
 			}
 			return []model.SyncedCatalogItem{{ID: "item_1", Game: query.Game, ExternalID: "frost_prime_set", Name: "Frost Prime Set"}}, nil
 		},
-	}))
+	}), "test-internal-token")
 
 	tests := []struct {
 		name       string
@@ -160,6 +160,7 @@ func TestRouterSmoke_SyncEndpoints(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Internal-Token", "test-internal-token")
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
@@ -179,6 +180,57 @@ func TestRouterSmoke_SyncEndpoints(t *testing.T) {
 	}
 }
 
+func TestRouterSmoke_SyncEndpointsRequireInternalToken(t *testing.T) {
+	t.Parallel()
+
+	router := NewRouter(zerolog.Nop(), handler.New("api-integration-service", stubIntegrationService{
+		searchFn: func(ctx context.Context, query model.SearchItemsQuery) ([]model.Item, error) { return nil, nil },
+		itemFn:   func(ctx context.Context, query model.GetItemQuery) (*model.Item, error) { return nil, nil },
+		priceFn:  func(ctx context.Context, query model.GetPricingQuery) (*model.PriceSnapshot, error) { return nil, nil },
+		syncItemFn: func(ctx context.Context, query model.SyncItemQuery) (*model.SyncedCatalogItem, error) {
+			return nil, nil
+		},
+		syncSearchFn: func(ctx context.Context, query model.SyncSearchQuery) ([]model.SyncedCatalogItem, error) {
+			return nil, nil
+		},
+	}), "test-internal-token")
+
+	req := httptest.NewRequest(http.MethodPost, "/internal/sync/item", strings.NewReader(`{"game":"warframe","id":"frost_prime_set"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusUnauthorized, rec.Body.String())
+	}
+}
+
+func TestRouterSmoke_SyncEndpointsFailClosedWhenInternalAuthIsUnconfigured(t *testing.T) {
+	t.Parallel()
+
+	router := NewRouter(zerolog.Nop(), handler.New("api-integration-service", stubIntegrationService{
+		searchFn: func(ctx context.Context, query model.SearchItemsQuery) ([]model.Item, error) { return nil, nil },
+		itemFn:   func(ctx context.Context, query model.GetItemQuery) (*model.Item, error) { return nil, nil },
+		priceFn:  func(ctx context.Context, query model.GetPricingQuery) (*model.PriceSnapshot, error) { return nil, nil },
+		syncItemFn: func(ctx context.Context, query model.SyncItemQuery) (*model.SyncedCatalogItem, error) {
+			return nil, nil
+		},
+		syncSearchFn: func(ctx context.Context, query model.SyncSearchQuery) ([]model.SyncedCatalogItem, error) {
+			return nil, nil
+		},
+	}), "")
+
+	req := httptest.NewRequest(http.MethodPost, "/internal/sync/item", strings.NewReader(`{"game":"warframe","id":"frost_prime_set"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Token", "whatever")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+}
+
 func TestRouterSmoke_UpstreamFailureMapsToBadGateway(t *testing.T) {
 	t.Parallel()
 
@@ -188,7 +240,7 @@ func TestRouterSmoke_UpstreamFailureMapsToBadGateway(t *testing.T) {
 		priceFn: func(ctx context.Context, query model.GetPricingQuery) (*model.PriceSnapshot, error) {
 			return nil, service.ErrUpstreamFailed
 		},
-	}))
+	}), "test-internal-token")
 
 	req := httptest.NewRequest(http.MethodGet, "/items/5448/prices?game=tarkov", nil)
 	rec := httptest.NewRecorder()

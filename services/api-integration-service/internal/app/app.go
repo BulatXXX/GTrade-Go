@@ -44,7 +44,7 @@ func Run(ctx context.Context) error {
 	)
 
 	h := handler.New(cfg.ServiceName, integrationService)
-	r := httpserver.NewRouter(logger, h)
+	r := httpserver.NewRouter(logger, h, cfg.InternalAPIToken)
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),
