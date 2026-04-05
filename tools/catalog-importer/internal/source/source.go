@@ -50,7 +50,7 @@ func New(cfg Config) (Source, error) {
 	case "eve":
 		return NewEVESource(client, cfg.Language, cfg.Limit), nil
 	case "tarkov":
-		return NewTarkovSource(), nil
+		return NewTarkovSource(client, cfg.Language, cfg.Limit), nil
 	default:
 		return nil, fmt.Errorf("unsupported source: %s", cfg.Name)
 	}
