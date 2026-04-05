@@ -31,8 +31,6 @@ func (f fakeCatalogClient) GetItem(ctx context.Context, id string) (*catalog.Ite
 }
 
 func TestRouterIntegration_WatchlistIsValidatedAndEnrichedByCatalog(t *testing.T) {
-	t.Parallel()
-
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("TEST_DATABASE_URL is required")
@@ -66,7 +64,7 @@ func TestRouterIntegration_WatchlistIsValidatedAndEnrichedByCatalog(t *testing.T
 	router := NewRouter(zerolog.Nop(), handler.New("user-asset-service", svc))
 
 	createUserReq := newIntegrationJSONRequest(t, http.MethodPost, "/users", map[string]any{
-		"user_id":      1,
+		"user_id":      101,
 		"display_name": "Alice",
 		"avatar_url":   "https://cdn.example.com/a.png",
 		"bio":          "Trader",
@@ -78,7 +76,7 @@ func TestRouterIntegration_WatchlistIsValidatedAndEnrichedByCatalog(t *testing.T
 	}
 
 	addWatchlistReq := newIntegrationJSONRequest(t, http.MethodPost, "/watchlist", map[string]any{
-		"user_id": 1,
+		"user_id": 101,
 		"item_id": "item-uuid-1",
 	})
 	addWatchlistRec := httptest.NewRecorder()
@@ -96,7 +94,7 @@ func TestRouterIntegration_WatchlistIsValidatedAndEnrichedByCatalog(t *testing.T
 		t.Fatalf("expected enriched item in create response, got %v", createdItem)
 	}
 
-	getWatchlistReq := httptest.NewRequest(http.MethodGet, "/watchlist?user_id=1", nil)
+	getWatchlistReq := httptest.NewRequest(http.MethodGet, "/watchlist?user_id=101", nil)
 	getWatchlistRec := httptest.NewRecorder()
 	router.ServeHTTP(getWatchlistRec, getWatchlistReq)
 	if getWatchlistRec.Code != http.StatusOK {
@@ -119,8 +117,6 @@ func TestRouterIntegration_WatchlistIsValidatedAndEnrichedByCatalog(t *testing.T
 }
 
 func TestRouterIntegration_RejectsMissingCatalogItem(t *testing.T) {
-	t.Parallel()
-
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("TEST_DATABASE_URL is required")
@@ -141,7 +137,7 @@ func TestRouterIntegration_RejectsMissingCatalogItem(t *testing.T) {
 	router := NewRouter(zerolog.Nop(), handler.New("user-asset-service", svc))
 
 	createUserReq := newIntegrationJSONRequest(t, http.MethodPost, "/users", map[string]any{
-		"user_id":      1,
+		"user_id":      202,
 		"display_name": "Alice",
 	})
 	createUserRec := httptest.NewRecorder()
@@ -151,7 +147,7 @@ func TestRouterIntegration_RejectsMissingCatalogItem(t *testing.T) {
 	}
 
 	addWatchlistReq := newIntegrationJSONRequest(t, http.MethodPost, "/watchlist", map[string]any{
-		"user_id": 1,
+		"user_id": 202,
 		"item_id": "missing-item",
 	})
 	addWatchlistRec := httptest.NewRecorder()

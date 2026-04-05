@@ -1,4 +1,4 @@
-.PHONY: up down logs build clean migrate-list auth-up auth-down auth-logs auth-db-up auth-db-down auth-test auth-test-integration auth-notification-up auth-notification-down auth-notification-logs auth-notification-e2e-test notification-up notification-down notification-logs notification-db-up notification-db-down notification-test notification-test-integration catalog-up catalog-down catalog-logs catalog-db-up catalog-db-down catalog-test catalog-test-integration catalog-build catalog-backup catalog-restore
+.PHONY: up down logs build clean migrate-list test-fast test-all auth-up auth-down auth-logs auth-db-up auth-db-down auth-test auth-test-integration auth-notification-up auth-notification-down auth-notification-logs auth-notification-e2e-test notification-up notification-down notification-logs notification-db-up notification-db-down notification-test notification-test-integration catalog-up catalog-down catalog-logs catalog-db-up catalog-db-down catalog-test catalog-test-integration catalog-build catalog-backup catalog-restore
 
 up:
 	docker compose -f deploy/docker-compose.yml --env-file deploy/.env up --build -d
@@ -8,6 +8,33 @@ down:
 
 logs:
 	docker compose -f deploy/docker-compose.yml --env-file deploy/.env logs -f
+
+test-fast:
+	@if [ ! -f deploy/.env ]; then echo "deploy/.env is missing. Run: cp deploy/.env.example deploy/.env"; exit 1; fi
+	@printf "\n==> Starting test databases\n"
+	@docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d postgres-auth postgres-user-asset postgres-catalog postgres-notification
+	@printf "\n==> auth-service\n"
+	@cd services/auth-service && TEST_DATABASE_URL='postgres://gtrade:gtrade@localhost:5433/gtrade_auth?sslmode=disable' GOCACHE=/tmp/gocache-auth go test ./...
+	@printf "\n==> notification-service\n"
+	@cd services/notification-service && TEST_DATABASE_URL='postgres://gtrade:gtrade@localhost:5437/gtrade_notification?sslmode=disable' GOCACHE=/tmp/gocache-notification go test ./...
+	@printf "\n==> catalog-service\n"
+	@cd services/catalog-service && TEST_DATABASE_URL='postgres://gtrade:gtrade@localhost:5436/gtrade_catalog?sslmode=disable' GOCACHE=/tmp/gocache-catalog go test ./...
+	@printf "\n==> user-asset-service\n"
+	@cd services/user-asset-service && TEST_DATABASE_URL='postgres://gtrade:gtrade@localhost:5434/gtrade_user_asset?sslmode=disable' GOCACHE=/tmp/gocache-user-asset go test ./...
+	@printf "\n==> api-gateway\n"
+	@cd services/api-gateway && GOCACHE=/tmp/gocache-gateway go test ./...
+	@printf "\n==> api-integration-service\n"
+	@cd services/api-integration-service && GOCACHE=/tmp/gocache-api-integration go test ./...
+	@printf "\n==> shared/httpmiddleware\n"
+	@cd shared/httpmiddleware && GOCACHE=/tmp/gocache-shared-httpmiddleware go test ./...
+	@printf "\n==> tools/catalog-importer\n"
+	@cd tools/catalog-importer && GOCACHE=/tmp/gocache-catalog-importer go test ./...
+	@printf "\n==> test-fast completed\n"
+
+test-all: test-fast
+	@printf "\n==> auth-service -> notification-service e2e\n"
+	@$(MAKE) --no-print-directory auth-notification-e2e-test
+	@printf "\n==> test-all completed\n"
 
 auth-up:
 	docker compose -f deploy/docker-compose.auth.yml --env-file deploy/.env up --build -d
