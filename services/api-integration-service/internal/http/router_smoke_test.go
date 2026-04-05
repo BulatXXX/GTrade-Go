@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,9 +17,11 @@ import (
 )
 
 type stubIntegrationService struct {
-	searchFn func(ctx context.Context, query model.SearchItemsQuery) ([]model.Item, error)
-	itemFn   func(ctx context.Context, query model.GetItemQuery) (*model.Item, error)
-	priceFn  func(ctx context.Context, query model.GetPricingQuery) (*model.PriceSnapshot, error)
+	searchFn     func(ctx context.Context, query model.SearchItemsQuery) ([]model.Item, error)
+	itemFn       func(ctx context.Context, query model.GetItemQuery) (*model.Item, error)
+	priceFn      func(ctx context.Context, query model.GetPricingQuery) (*model.PriceSnapshot, error)
+	syncItemFn   func(ctx context.Context, query model.SyncItemQuery) (*model.SyncedCatalogItem, error)
+	syncSearchFn func(ctx context.Context, query model.SyncSearchQuery) ([]model.SyncedCatalogItem, error)
 }
 
 func (s stubIntegrationService) SearchItems(ctx context.Context, query model.SearchItemsQuery) ([]model.Item, error) {
@@ -31,6 +34,14 @@ func (s stubIntegrationService) GetItem(ctx context.Context, query model.GetItem
 
 func (s stubIntegrationService) GetPricing(ctx context.Context, query model.GetPricingQuery) (*model.PriceSnapshot, error) {
 	return s.priceFn(ctx, query)
+}
+
+func (s stubIntegrationService) SyncItemToCatalog(ctx context.Context, query model.SyncItemQuery) (*model.SyncedCatalogItem, error) {
+	return s.syncItemFn(ctx, query)
+}
+
+func (s stubIntegrationService) SyncSearchToCatalog(ctx context.Context, query model.SyncSearchQuery) ([]model.SyncedCatalogItem, error) {
+	return s.syncSearchFn(ctx, query)
 }
 
 func TestRouterSmoke(t *testing.T) {
@@ -68,6 +79,12 @@ func TestRouterSmoke(t *testing.T) {
 				Pricing:    model.Pricing{Current: &current, Avg24h: &current},
 			}, nil
 		},
+		syncItemFn: func(ctx context.Context, query model.SyncItemQuery) (*model.SyncedCatalogItem, error) {
+			return &model.SyncedCatalogItem{ID: "item_1", Game: query.Game, ExternalID: query.ID, Name: "stub"}, nil
+		},
+		syncSearchFn: func(ctx context.Context, query model.SyncSearchQuery) ([]model.SyncedCatalogItem, error) {
+			return []model.SyncedCatalogItem{{ID: "item_1", Game: query.Game, ExternalID: "5448", Name: "stub"}}, nil
+		},
 	}))
 
 	tests := []struct {
@@ -88,6 +105,61 @@ func TestRouterSmoke(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
+			rec := httptest.NewRecorder()
+
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+
+			var got map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if _, ok := got[tt.wantField]; !ok {
+				t.Fatalf("missing field %q in %v", tt.wantField, got)
+			}
+		})
+	}
+}
+
+func TestRouterSmoke_SyncEndpoints(t *testing.T) {
+	t.Parallel()
+
+	router := NewRouter(zerolog.Nop(), handler.New("api-integration-service", stubIntegrationService{
+		searchFn: func(ctx context.Context, query model.SearchItemsQuery) ([]model.Item, error) { return nil, nil },
+		itemFn:   func(ctx context.Context, query model.GetItemQuery) (*model.Item, error) { return nil, nil },
+		priceFn:  func(ctx context.Context, query model.GetPricingQuery) (*model.PriceSnapshot, error) { return nil, nil },
+		syncItemFn: func(ctx context.Context, query model.SyncItemQuery) (*model.SyncedCatalogItem, error) {
+			if query.Game == "" || query.ID == "" {
+				return nil, service.ErrInvalidInput
+			}
+			return &model.SyncedCatalogItem{ID: "item_1", Game: query.Game, ExternalID: query.ID, Name: "Frost Prime Set"}, nil
+		},
+		syncSearchFn: func(ctx context.Context, query model.SyncSearchQuery) ([]model.SyncedCatalogItem, error) {
+			if query.Game == "" || query.Query == "" {
+				return nil, service.ErrInvalidInput
+			}
+			return []model.SyncedCatalogItem{{ID: "item_1", Game: query.Game, ExternalID: "frost_prime_set", Name: "Frost Prime Set"}}, nil
+		},
+	}))
+
+	tests := []struct {
+		name       string
+		path       string
+		body       string
+		wantStatus int
+		wantField  string
+	}{
+		{name: "sync item", path: "/internal/sync/item", body: `{"game":"warframe","id":"frost_prime_set"}`, wantStatus: http.StatusOK, wantField: "item"},
+		{name: "sync search", path: "/internal/sync/search", body: `{"game":"warframe","q":"frost","limit":1}`, wantStatus: http.StatusOK, wantField: "items"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)

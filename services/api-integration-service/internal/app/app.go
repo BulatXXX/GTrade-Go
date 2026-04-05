@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	catalogclient "gtrade/services/api-integration-service/internal/client/catalog"
 	"gtrade/services/api-integration-service/internal/config"
 	"gtrade/services/api-integration-service/internal/handler"
 	httpserver "gtrade/services/api-integration-service/internal/http"
@@ -34,7 +35,9 @@ func Run(ctx context.Context) error {
 		logger.Warn().Msg("DATABASE_URL is empty, postgres connection skipped")
 	}
 
-	integrationService := service.New(
+	catalogWriter := catalogclient.New(cfg.CatalogURL)
+	integrationService := service.NewWithCatalog(
+		catalogWriter,
 		marketplace.NewTarkovClient(),
 		marketplace.NewWarframeClient(),
 		marketplace.NewEVEClient(),

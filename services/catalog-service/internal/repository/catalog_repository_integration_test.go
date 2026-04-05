@@ -233,6 +233,44 @@ func TestCatalogRepositoryIntegration_UpsertItem_UpdatesExistingRecord(t *testin
 	}
 }
 
+func TestCatalogRepositoryIntegration_UpsertItem_PreservesTranslationsWhenOmitted(t *testing.T) {
+	ctx := context.Background()
+	pool := newCatalogTestPool(t, ctx)
+	repo := repository.NewCatalogRepository(pool)
+
+	first, err := repo.UpsertItem(ctx, model.CreateItemInput{
+		Game:       "test",
+		Source:     "market",
+		ExternalID: "preserve-translations",
+		Slug:       "preserve-translations",
+		Name:       "Preserve Item",
+		Translations: []model.ItemTranslation{
+			{LanguageCode: "ru", Name: "Сохранить Перевод", Description: "Описание"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("initial upsert: %v", err)
+	}
+
+	second, err := repo.UpsertItem(ctx, model.CreateItemInput{
+		Game:       "test",
+		Source:     "market",
+		ExternalID: "preserve-translations",
+		Slug:       "preserve-translations-updated",
+		Name:       "Preserve Item Updated",
+	})
+	if err != nil {
+		t.Fatalf("second upsert: %v", err)
+	}
+
+	if first.ID != second.ID {
+		t.Fatalf("upsert should update same record, ids: %q vs %q", first.ID, second.ID)
+	}
+	if len(second.Translations) != 1 || second.Translations[0].LanguageCode != "ru" || second.Translations[0].Name != "Сохранить Перевод" {
+		t.Fatalf("translations should be preserved, got %#v", second.Translations)
+	}
+}
+
 func newCatalogTestPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	t.Helper()
 

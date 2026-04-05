@@ -12,10 +12,13 @@
 - endpoint `GET /items/:id`
 - endpoint `GET /items/:id/prices`
 - endpoint `GET /items/:id/top-price`
+- endpoint `POST /internal/sync/item`
+- endpoint `POST /internal/sync/search`
 - общий service layer с registry внешних provider'ов
 - адаптер `warframe.market`
 - адаптер `EVE ESI`
 - адаптер `tarkov.dev`
+- catalog client для `POST /items/upsert`
 - smoke tests HTTP-слоя
 - unit tests service layer
 - provider-level tests для `warframe`, `eve`, `tarkov`
@@ -27,6 +30,8 @@
 - `GET /items/:id?game=...&game_mode=...`
 - `GET /items/:id/prices?game=...&game_mode=...`
 - `GET /items/:id/top-price?game=...&game_mode=...`
+- `POST /internal/sync/item`
+- `POST /internal/sync/search`
 
 ## Текущий flow
 
@@ -36,11 +41,13 @@
 - для `tarkov` дополнительно учитывается `game_mode` (`regular` по умолчанию, либо `pve`)
 - `GET /items/:id/prices` возвращает полный normalized pricing snapshot
 - `GET /items/:id/top-price` возвращает только главное значение цены для совместимости и простых UI-сценариев
+- `POST /internal/sync/item` забирает внешний item и пишет его в `catalog-service`
+- `POST /internal/sync/search` берет страницу provider search results и пишет их в `catalog-service`
 
 ## Как распределена ответственность
 
 - `catalog-service` остается локальным source of truth для item metadata и поиска по `eve`
-- `api-integration-service` отвечает за runtime fetch и нормализацию внешних данных
+- `api-integration-service` отвечает за runtime fetch, нормализацию внешних данных и sync в каталог
 - для `warframe` и `tarkov` сервис умеет и искать, и получать карточки, и получать цены
 - для `eve` сервис получает item card и цены, а поиск должен идти из локального каталога
 
@@ -76,8 +83,8 @@
 - вынести OpenAPI/Swagger UI в удобный локальный просмотр
 - добавить более богатые analytics endpoint'ы при необходимости
 - решить, нужен ли storage для historical pricing snapshots
-- добавить internal auth для внутренних sync/refresh сценариев, когда они появятся
-- при необходимости связать сервис с `catalog-service` через sync flow, а не только runtime fetch
+- добавить internal auth для внутренних sync endpoint'ов
+- решить, нужен ли отдельный scheduler/worker для регулярного catalog sync
 
 ## Ключевые файлы
 
@@ -85,8 +92,9 @@
 - `internal/service/marketplace/warframe.go` — адаптер `warframe.market`
 - `internal/service/marketplace/eve.go` — адаптер `EVE ESI`
 - `internal/service/marketplace/tarkov.go` — адаптер `tarkov.dev`
-- `internal/handler/integration.go` — HTTP handlers runtime fetch endpoint'ов
-- `internal/model/model.go` — unified DTO для item/pricing/top-price
+- `internal/client/catalog/client.go` — клиент `catalog-service`
+- `internal/handler/integration.go` — HTTP handlers runtime fetch и internal sync endpoint'ов
+- `internal/model/model.go` — unified DTO для item/pricing/top-price/sync
 - `internal/http/router.go` — роутер и middleware
 - `internal/http/router_smoke_test.go` — HTTP smoke tests
 - `docs/openapi.yaml` — актуальный OpenAPI/Swagger контракт

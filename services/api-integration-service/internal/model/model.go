@@ -27,6 +27,20 @@ type GetPricingQuery struct {
 	ID       string
 }
 
+type SyncItemQuery struct {
+	Game     string
+	GameMode string
+	ID       string
+}
+
+type SyncSearchQuery struct {
+	Game     string
+	GameMode string
+	Query    string
+	Limit    int
+	Offset   int
+}
+
 type SearchItemsResponse struct {
 	Items  []Item `json:"items"`
 	Limit  int    `json:"limit"`
@@ -51,6 +65,17 @@ type TopPriceResponse struct {
 	FetchedAt time.Time `json:"fetched_at"`
 }
 
+type SyncItemResponse struct {
+	Item SyncedCatalogItem `json:"item"`
+}
+
+type SyncSearchResponse struct {
+	Items  []SyncedCatalogItem `json:"items"`
+	Count  int                 `json:"count"`
+	Limit  int                 `json:"limit"`
+	Offset int                 `json:"offset"`
+}
+
 type Item struct {
 	ID          string   `json:"id"`
 	Game        string   `json:"game"`
@@ -63,6 +88,17 @@ type Item struct {
 	URL         string   `json:"url,omitempty"`
 	Currency    string   `json:"currency,omitempty"`
 	Types       []string `json:"types,omitempty"`
+}
+
+type SyncedCatalogItem struct {
+	ID         string    `json:"id"`
+	Game       string    `json:"game"`
+	Source     string    `json:"source"`
+	ExternalID string    `json:"external_id"`
+	Slug       string    `json:"slug"`
+	Name       string    `json:"name"`
+	ImageURL   string    `json:"image_url,omitempty"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type PriceSnapshot struct {

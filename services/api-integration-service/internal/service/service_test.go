@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
+	catalogclient "gtrade/services/api-integration-service/internal/client/catalog"
 	"gtrade/services/api-integration-service/internal/model"
 	"gtrade/services/api-integration-service/internal/service/marketplace"
 )
@@ -14,6 +16,10 @@ type stubProvider struct {
 	searchFn  func(ctx context.Context, query model.SearchItemsQuery) ([]model.Item, error)
 	getItemFn func(ctx context.Context, query model.GetItemQuery) (*model.Item, error)
 	priceFn   func(ctx context.Context, query model.GetPricingQuery) (*model.PriceSnapshot, error)
+}
+
+type stubCatalogWriter struct {
+	upsertFn func(ctx context.Context, input catalogclient.UpsertItemRequest) (*catalogclient.Item, error)
 }
 
 func (s stubProvider) Game() string { return s.game }
@@ -28,6 +34,10 @@ func (s stubProvider) GetItem(ctx context.Context, query model.GetItemQuery) (*m
 
 func (s stubProvider) GetPricing(ctx context.Context, query model.GetPricingQuery) (*model.PriceSnapshot, error) {
 	return s.priceFn(ctx, query)
+}
+
+func (s stubCatalogWriter) UpsertItem(ctx context.Context, input catalogclient.UpsertItemRequest) (*catalogclient.Item, error) {
+	return s.upsertFn(ctx, input)
 }
 
 func TestServiceSearchItems_DelegatesToProvider(t *testing.T) {
@@ -119,5 +129,101 @@ func TestServiceGetPricing_DefaultsTarkovGameModeToRegular(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("GetPricing: %v", err)
+	}
+}
+
+func TestServiceSyncItemToCatalog_UpsertsMappedItem(t *testing.T) {
+	t.Parallel()
+
+	svc := NewWithCatalog(stubCatalogWriter{
+		upsertFn: func(ctx context.Context, input catalogclient.UpsertItemRequest) (*catalogclient.Item, error) {
+			if input.Game != "warframe" || input.Source != "warframe-market" || input.ExternalID != "frost_prime_set" {
+				t.Fatalf("unexpected upsert input: %#v", input)
+			}
+			if input.Slug != "frost_prime_set" || input.Name != "Frost Prime Set" {
+				t.Fatalf("unexpected mapped fields: %#v", input)
+			}
+			return &catalogclient.Item{
+				ID:         "item_1",
+				Game:       input.Game,
+				Source:     input.Source,
+				ExternalID: input.ExternalID,
+				Slug:       input.Slug,
+				Name:       input.Name,
+				UpdatedAt:  time.Unix(0, 0).UTC(),
+			}, nil
+		},
+	}, stubProvider{
+		game:     "warframe",
+		searchFn: func(ctx context.Context, query model.SearchItemsQuery) ([]model.Item, error) { return nil, nil },
+		getItemFn: func(ctx context.Context, query model.GetItemQuery) (*model.Item, error) {
+			return &model.Item{
+				ID:          "frost_prime_set",
+				Game:        "warframe",
+				Source:      "warframe-market",
+				Slug:        "frost_prime_set",
+				Name:        "Frost Prime Set",
+				Description: "Prime set",
+				ImageURL:    "https://example.com/frost.png",
+			}, nil
+		},
+		priceFn: func(ctx context.Context, query model.GetPricingQuery) (*model.PriceSnapshot, error) { return nil, nil },
+	})
+
+	item, err := svc.SyncItemToCatalog(context.Background(), model.SyncItemQuery{
+		Game: "warframe",
+		ID:   "frost_prime_set",
+	})
+	if err != nil {
+		t.Fatalf("SyncItemToCatalog: %v", err)
+	}
+	if item.ID != "item_1" || item.ExternalID != "frost_prime_set" {
+		t.Fatalf("unexpected synced item: %#v", item)
+	}
+}
+
+func TestServiceSyncSearchToCatalog_DefaultsTarkovGameModeToRegular(t *testing.T) {
+	t.Parallel()
+
+	svc := NewWithCatalog(stubCatalogWriter{
+		upsertFn: func(ctx context.Context, input catalogclient.UpsertItemRequest) (*catalogclient.Item, error) {
+			return &catalogclient.Item{
+				ID:         "item_5448",
+				Game:       input.Game,
+				Source:     input.Source,
+				ExternalID: input.ExternalID,
+				Slug:       input.Slug,
+				Name:       input.Name,
+			}, nil
+		},
+	}, stubProvider{
+		game: "tarkov",
+		searchFn: func(ctx context.Context, query model.SearchItemsQuery) ([]model.Item, error) {
+			if query.GameMode != "regular" {
+				t.Fatalf("game_mode = %q, want regular", query.GameMode)
+			}
+			return []model.Item{{
+				ID:       "5448",
+				Game:     "tarkov",
+				GameMode: query.GameMode,
+				Source:   "tarkov-dev",
+				Name:     "Makarov",
+				Slug:     "5448",
+			}}, nil
+		},
+		getItemFn: func(ctx context.Context, query model.GetItemQuery) (*model.Item, error) { return nil, nil },
+		priceFn:   func(ctx context.Context, query model.GetPricingQuery) (*model.PriceSnapshot, error) { return nil, nil },
+	})
+
+	items, err := svc.SyncSearchToCatalog(context.Background(), model.SyncSearchQuery{
+		Game:  "tarkov",
+		Query: "mak",
+		Limit: 1,
+	})
+	if err != nil {
+		t.Fatalf("SyncSearchToCatalog: %v", err)
+	}
+	if len(items) != 1 || items[0].ExternalID != "5448" {
+		t.Fatalf("unexpected synced items: %#v", items)
 	}
 }

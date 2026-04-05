@@ -11,6 +11,7 @@
 - получает item data из внешних API
 - получает pricing data из внешних API
 - нормализует ответы в единый DTO для фронта и соседних сервисов
+- умеет по внутренним endpoint'ам синхронить item metadata в `catalog-service`
 - не заменяет локальный `catalog-service`
 
 ## Поддержанные сценарии
@@ -149,6 +150,22 @@ curl -sS 'http://localhost:8083/items/5448bd6b4bdc2dfc2f8b4569/prices?game=tarko
 curl -sS 'http://localhost:8083/items/5448bd6b4bdc2dfc2f8b4569/prices?game=tarkov&game_mode=pve'
 ```
 
+### 13. Sync one item into catalog
+
+```bash
+curl -sS -X POST 'http://localhost:8083/internal/sync/item' \
+  -H 'Content-Type: application/json' \
+  -d '{"game":"warframe","id":"frost_prime_set"}'
+```
+
+### 14. Sync provider search page into catalog
+
+```bash
+curl -sS -X POST 'http://localhost:8083/internal/sync/search' \
+  -H 'Content-Type: application/json' \
+  -d '{"game":"tarkov","q":"makarov","game_mode":"regular","limit":5,"offset":0}'
+```
+
 Если `game_mode` для `tarkov` не передать, сервис использует `regular`.
 
 ## Ожидаемые контракты
@@ -170,4 +187,4 @@ curl -sS 'http://localhost:8083/items/5448bd6b4bdc2dfc2f8b4569/prices?game=tarko
 - `eve` search сейчас не реализован как runtime endpoint поверх ESI
 - `top-price` для игр с агрегированной аналитикой является сокращением от полного pricing snapshot
 - нет persistence layer для historical price snapshots
-- нет internal auth для будущих sync endpoint'ов
+- нет internal auth для sync endpoint'ов

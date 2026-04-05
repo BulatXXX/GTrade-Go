@@ -117,8 +117,10 @@ func (r *CatalogRepository) UpsertItem(ctx context.Context, input model.CreateIt
 		return nil, fmt.Errorf("upsert item: %w", err)
 	}
 
-	if err := upsertTranslations(ctx, tx, item.ID, input.Translations, true); err != nil {
-		return nil, err
+	if input.Translations != nil {
+		if err := upsertTranslations(ctx, tx, item.ID, input.Translations, true); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {

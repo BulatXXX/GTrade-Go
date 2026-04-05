@@ -215,6 +215,70 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /internal/sync/item:
+    post:
+      summary: Fetch one external item and upsert it into catalog-service
+      tags: [internal-sync]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncItemRequest'
+      responses:
+        '200':
+          description: Item synced into catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncItemResponse'
+        '400':
+          description: Invalid request or unsupported game
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Item not found in upstream provider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream or catalog request failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /internal/sync/search:
+    post:
+      summary: Fetch one provider search page and upsert found items into catalog-service
+      tags: [internal-sync]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncSearchRequest'
+      responses:
+        '200':
+          description: Search page synced into catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncSearchResponse'
+        '400':
+          description: Invalid request or unsupported game
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream or catalog request failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   schemas:
     HealthResponse:
@@ -281,6 +345,85 @@ components:
         fetched_at:
           type: string
           format: date-time
+    SyncItemRequest:
+      type: object
+      required: [game, id]
+      properties:
+        game:
+          type: string
+          enum: [warframe, eve, tarkov]
+        game_mode:
+          type: string
+          enum: [regular, pve]
+        id:
+          type: string
+    SyncSearchRequest:
+      type: object
+      required: [game, q]
+      properties:
+        game:
+          type: string
+          enum: [warframe, eve, tarkov]
+        game_mode:
+          type: string
+          enum: [regular, pve]
+        q:
+          type: string
+        limit:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+          default: 20
+        offset:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
+    SyncedCatalogItem:
+      type: object
+      required: [id, game, source, external_id, slug, name, updated_at]
+      properties:
+        id:
+          type: string
+        game:
+          type: string
+        source:
+          type: string
+        external_id:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        image_url:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+    SyncItemResponse:
+      type: object
+      required: [item]
+      properties:
+        item:
+          $ref: '#/components/schemas/SyncedCatalogItem'
+    SyncSearchResponse:
+      type: object
+      required: [items, count, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncedCatalogItem'
+        count:
+          type: integer
+          format: int32
+        limit:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int32
     Item:
       type: object
       required: [id, game, source, name]

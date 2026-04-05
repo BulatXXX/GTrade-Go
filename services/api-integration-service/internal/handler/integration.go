@@ -92,6 +92,63 @@ func (h *Handler) GetTopPrice(c *gin.Context) {
 	})
 }
 
+func (h *Handler) SyncItem(c *gin.Context) {
+	var req struct {
+		Game     string `json:"game"`
+		GameMode string `json:"game_mode"`
+		ID       string `json:"id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	item, err := h.service.SyncItemToCatalog(c.Request.Context(), model.SyncItemQuery{
+		Game:     req.Game,
+		GameMode: req.GameMode,
+		ID:       req.ID,
+	})
+	if err != nil {
+		writeServiceError(c, err, "sync item failed")
+		return
+	}
+
+	c.JSON(http.StatusOK, model.SyncItemResponse{Item: *item})
+}
+
+func (h *Handler) SyncSearch(c *gin.Context) {
+	var req struct {
+		Game     string `json:"game"`
+		GameMode string `json:"game_mode"`
+		Query    string `json:"q"`
+		Limit    int    `json:"limit"`
+		Offset   int    `json:"offset"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	items, err := h.service.SyncSearchToCatalog(c.Request.Context(), model.SyncSearchQuery{
+		Game:     req.Game,
+		GameMode: req.GameMode,
+		Query:    req.Query,
+		Limit:    req.Limit,
+		Offset:   req.Offset,
+	})
+	if err != nil {
+		writeServiceError(c, err, "sync search failed")
+		return
+	}
+
+	c.JSON(http.StatusOK, model.SyncSearchResponse{
+		Items:  items,
+		Count:  len(items),
+		Limit:  req.Limit,
+		Offset: req.Offset,
+	})
+}
+
 func parseIntQuery(c *gin.Context, key string, fallback int) (int, error) {
 	value := c.Query(key)
 	if value == "" {

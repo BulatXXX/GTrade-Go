@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	catalogclient "gtrade/services/api-integration-service/internal/client/catalog"
 	"gtrade/services/api-integration-service/internal/model"
 	"gtrade/services/api-integration-service/internal/service/marketplace"
 )
@@ -18,10 +19,19 @@ var (
 )
 
 type Service struct {
-	providers map[string]marketplace.Provider
+	providers     map[string]marketplace.Provider
+	catalogWriter CatalogWriter
 }
 
 func New(providers ...marketplace.Provider) *Service {
+	return NewWithCatalog(nil, providers...)
+}
+
+type CatalogWriter interface {
+	UpsertItem(ctx context.Context, input catalogclient.UpsertItemRequest) (*catalogclient.Item, error)
+}
+
+func NewWithCatalog(catalogWriter CatalogWriter, providers ...marketplace.Provider) *Service {
 	registry := make(map[string]marketplace.Provider, len(providers))
 	for _, provider := range providers {
 		if provider == nil {
@@ -30,7 +40,10 @@ func New(providers ...marketplace.Provider) *Service {
 		registry[strings.ToLower(provider.Game())] = provider
 	}
 
-	return &Service{providers: registry}
+	return &Service{
+		providers:     registry,
+		catalogWriter: catalogWriter,
+	}
 }
 
 func (s *Service) SearchItems(ctx context.Context, query model.SearchItemsQuery) ([]model.Item, error) {
@@ -96,6 +109,62 @@ func (s *Service) GetPricing(ctx context.Context, query model.GetPricingQuery) (
 	return price, nil
 }
 
+func (s *Service) SyncItemToCatalog(ctx context.Context, query model.SyncItemQuery) (*model.SyncedCatalogItem, error) {
+	if s.catalogWriter == nil {
+		return nil, ErrUpstreamFailed
+	}
+	if strings.TrimSpace(query.Game) == "" || strings.TrimSpace(query.ID) == "" {
+		return nil, ErrInvalidInput
+	}
+
+	item, err := s.GetItem(ctx, model.GetItemQuery{
+		Game:     query.Game,
+		GameMode: query.GameMode,
+		ID:       query.ID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	synced, err := s.catalogWriter.UpsertItem(ctx, toCatalogUpsert(*item))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUpstreamFailed, err)
+	}
+
+	return toSyncedCatalogItem(*synced), nil
+}
+
+func (s *Service) SyncSearchToCatalog(ctx context.Context, query model.SyncSearchQuery) ([]model.SyncedCatalogItem, error) {
+	if s.catalogWriter == nil {
+		return nil, ErrUpstreamFailed
+	}
+	if strings.TrimSpace(query.Game) == "" || strings.TrimSpace(query.Query) == "" {
+		return nil, ErrInvalidInput
+	}
+
+	items, err := s.SearchItems(ctx, model.SearchItemsQuery{
+		Game:     query.Game,
+		GameMode: query.GameMode,
+		Query:    query.Query,
+		Limit:    query.Limit,
+		Offset:   query.Offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	syncedItems := make([]model.SyncedCatalogItem, 0, len(items))
+	for _, item := range items {
+		synced, err := s.catalogWriter.UpsertItem(ctx, toCatalogUpsert(item))
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrUpstreamFailed, err)
+		}
+		syncedItems = append(syncedItems, *toSyncedCatalogItem(*synced))
+	}
+
+	return syncedItems, nil
+}
+
 func (s *Service) providerFor(game string) (marketplace.Provider, error) {
 	provider, ok := s.providers[strings.ToLower(strings.TrimSpace(game))]
 	if !ok {
@@ -125,4 +194,34 @@ func normalizeGameMode(game, gameMode string) string {
 		return "regular"
 	}
 	return mode
+}
+
+func toCatalogUpsert(item model.Item) catalogclient.UpsertItemRequest {
+	slug := strings.TrimSpace(item.Slug)
+	if slug == "" {
+		slug = strings.TrimSpace(item.ID)
+	}
+
+	return catalogclient.UpsertItemRequest{
+		Game:        strings.TrimSpace(item.Game),
+		Source:      strings.TrimSpace(item.Source),
+		ExternalID:  strings.TrimSpace(item.ID),
+		Slug:        slug,
+		Name:        strings.TrimSpace(item.Name),
+		Description: strings.TrimSpace(item.Description),
+		ImageURL:    strings.TrimSpace(item.ImageURL),
+	}
+}
+
+func toSyncedCatalogItem(item catalogclient.Item) *model.SyncedCatalogItem {
+	return &model.SyncedCatalogItem{
+		ID:         item.ID,
+		Game:       item.Game,
+		Source:     item.Source,
+		ExternalID: item.ExternalID,
+		Slug:       item.Slug,
+		Name:       item.Name,
+		ImageURL:   item.ImageURL,
+		UpdatedAt:  item.UpdatedAt,
+	}
 }
