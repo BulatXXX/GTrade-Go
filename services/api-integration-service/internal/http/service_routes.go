@@ -8,5 +8,6 @@ import (
 func registerServiceRoutes(r *gin.Engine, h *handler.Handler) {
 	r.GET("/search", h.Search)
 	r.GET("/items/:id", h.GetByID)
+	r.GET("/items/:id/prices", h.GetPricing)
 	r.GET("/items/:id/top-price", h.GetTopPrice)
 }

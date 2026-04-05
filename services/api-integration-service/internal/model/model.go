@@ -41,6 +41,16 @@ type PriceResponse struct {
 	Price PriceSnapshot `json:"price"`
 }
 
+type TopPriceResponse struct {
+	ItemID    string    `json:"item_id"`
+	Game      string    `json:"game"`
+	GameMode  string    `json:"game_mode,omitempty"`
+	Source    string    `json:"source"`
+	Currency  string    `json:"currency"`
+	Value     *float64  `json:"value,omitempty"`
+	FetchedAt time.Time `json:"fetched_at"`
+}
+
 type Item struct {
 	ID          string   `json:"id"`
 	Game        string   `json:"game"`

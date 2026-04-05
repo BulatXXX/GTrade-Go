@@ -56,7 +56,7 @@ func (h *Handler) GetByID(c *gin.Context) {
 	c.JSON(http.StatusOK, model.ItemResponse{Item: *item})
 }
 
-func (h *Handler) GetTopPrice(c *gin.Context) {
+func (h *Handler) GetPricing(c *gin.Context) {
 	price, err := h.service.GetPricing(c.Request.Context(), model.GetPricingQuery{
 		Game:     c.Query("game"),
 		GameMode: c.Query("game_mode"),
@@ -68,6 +68,28 @@ func (h *Handler) GetTopPrice(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, model.PriceResponse{Price: *price})
+}
+
+func (h *Handler) GetTopPrice(c *gin.Context) {
+	price, err := h.service.GetPricing(c.Request.Context(), model.GetPricingQuery{
+		Game:     c.Query("game"),
+		GameMode: c.Query("game_mode"),
+		ID:       c.Param("id"),
+	})
+	if err != nil {
+		writeServiceError(c, err, "get top price failed")
+		return
+	}
+
+	c.JSON(http.StatusOK, model.TopPriceResponse{
+		ItemID:    price.ItemID,
+		Game:      price.Game,
+		GameMode:  price.GameMode,
+		Source:    price.Source,
+		Currency:  price.Currency,
+		Value:     price.Pricing.Current,
+		FetchedAt: price.FetchedAt,
+	})
 }
 
 func parseIntQuery(c *gin.Context, key string, fallback int) (int, error) {

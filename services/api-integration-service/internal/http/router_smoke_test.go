@@ -80,7 +80,8 @@ func TestRouterSmoke(t *testing.T) {
 		{name: "health", method: http.MethodGet, path: "/health", wantStatus: http.StatusOK, wantField: "status"},
 		{name: "search", method: http.MethodGet, path: "/search?game=tarkov&q=ak", wantStatus: http.StatusOK, wantField: "items"},
 		{name: "get item", method: http.MethodGet, path: "/items/5448?game=tarkov", wantStatus: http.StatusOK, wantField: "item"},
-		{name: "get price", method: http.MethodGet, path: "/items/5448/top-price?game=tarkov&game_mode=pve", wantStatus: http.StatusOK, wantField: "price"},
+		{name: "get prices", method: http.MethodGet, path: "/items/5448/prices?game=tarkov&game_mode=pve", wantStatus: http.StatusOK, wantField: "price"},
+		{name: "get top price", method: http.MethodGet, path: "/items/5448/top-price?game=tarkov&game_mode=pve", wantStatus: http.StatusOK, wantField: "value"},
 		{name: "search invalid", method: http.MethodGet, path: "/search?q=ak", wantStatus: http.StatusBadRequest, wantField: "error"},
 	}
 
@@ -117,7 +118,7 @@ func TestRouterSmoke_UpstreamFailureMapsToBadGateway(t *testing.T) {
 		},
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/items/5448/top-price?game=tarkov", nil)
+	req := httptest.NewRequest(http.MethodGet, "/items/5448/prices?game=tarkov", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
