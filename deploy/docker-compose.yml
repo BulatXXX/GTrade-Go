@@ -72,15 +72,33 @@ services:
       retries: 10
 
   api-gateway:
-    build: ../services/api-gateway
+    build:
+      context: ../
+      dockerfile: deploy/dockerfiles/api-gateway.Dockerfile
     env_file: ./.env
     environment:
       SERVICE_NAME: api-gateway
       PORT: ${API_GATEWAY_PORT}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
+      USER_ASSET_SERVICE_URL: ${USER_ASSET_SERVICE_URL}
+      CATALOG_SERVICE_URL: ${CATALOG_SERVICE_URL}
+      API_INTEGRATION_SERVICE_URL: ${API_INTEGRATION_SERVICE_URL}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL}
       JWT_SECRET: ${JWT_SECRET}
       LOG_LEVEL: ${LOG_LEVEL}
     ports:
       - "8080:8080"
+    depends_on:
+      auth-service:
+        condition: service_started
+      user-asset-service:
+        condition: service_started
+      api-integration-service:
+        condition: service_started
+      catalog-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
 
   auth-service:
     build:
@@ -103,12 +121,15 @@ services:
         condition: service_started
 
   user-asset-service:
-    build: ../services/user-asset-service
+    build:
+      context: ../
+      dockerfile: deploy/dockerfiles/user-asset-service.Dockerfile
     env_file: ./.env
     environment:
       SERVICE_NAME: user-asset-service
       PORT: ${USER_ASSET_SERVICE_PORT}
       DATABASE_URL: ${USER_ASSET_SERVICE_DATABASE_URL}
+      CATALOG_SERVICE_URL: ${CATALOG_SERVICE_URL}
       JWT_SECRET: ${JWT_SECRET}
       LOG_LEVEL: ${LOG_LEVEL}
     ports:
@@ -118,15 +139,22 @@ services:
         condition: service_healthy
 
   api-integration-service:
-    build: ../services/api-integration-service
+    build:
+      context: ../
+      dockerfile: deploy/dockerfiles/api-integration-service.Dockerfile
     env_file: ./.env
     environment:
       SERVICE_NAME: api-integration-service
       PORT: ${API_INTEGRATION_SERVICE_PORT}
+      CATALOG_SERVICE_URL: ${CATALOG_SERVICE_URL}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
       JWT_SECRET: ${JWT_SECRET}
       LOG_LEVEL: ${LOG_LEVEL}
     ports:
       - "8083:8083"
+    depends_on:
+      catalog-service:
+        condition: service_started
 
   catalog-service:
     build:

@@ -120,5 +120,5 @@ GOCACHE=/tmp/gocache-api-integration go test ./...
 
 - `docs/README.md`
 - `docs/openapi.yaml`
-- `../../docs/architecture.md`
-- `../../docs/roadmap.md`
+- `../../docs/requirements/architecture.md`
+- `../../docs/backlog/roadmap.md`

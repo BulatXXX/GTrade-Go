@@ -1,23 +1,13 @@
-# GTrade Data System (GTrade)
+# GTrade Data System
 
-GTrade Data System — платформа управления данными внутриигровых торговых площадок.
+GTrade Data System — платформа управления данными внутриигровых торговых площадок. На текущем этапе это локально поднимаемый backend-контур из нескольких Go-сервисов с единым gateway, локальным каталогом, runtime-интеграциями с внешними API и пользовательским cloud-state.
 
 ## Структура репозитория
 
 - `services/` — Go-микросервисы
-- `tools/` — Go CLI-утилиты
-- `docs/` — документация по архитектуре и сервисам
-- `deploy/` — docker-compose и локальные deploy-артефакты
-
-## Сервисы
-
-- `api-gateway`
-- `auth-service`
-- `user-asset-service`
-- `api-integration-service`
-- `catalog-service`
-- `notification-service`
-- `tools/catalog-importer`
+- `tools/` — CLI-утилиты
+- `docs/` — требования, backlog, сценарии и шаблоны
+- `deploy/` — `docker-compose`, env и Dockerfile для локального запуска
 
 ## Технологический стек
 
@@ -29,21 +19,21 @@ GTrade Data System — платформа управления данными в
 - zerolog
 - Docker / docker-compose
 
-## Запуск локально
+## Локальный запуск
 
-1. Скопировать env-файл:
+1. Подготовить env:
 
 ```bash
 cp deploy/.env.example deploy/.env
 ```
 
-2. Поднять инфраструктуру:
+2. Поднять весь стек:
 
 ```bash
 make up
 ```
 
-3. Проверить health endpoint'ы:
+3. Проверить health:
 
 - `http://localhost:8080/health`
 - `http://localhost:8081/health`
@@ -58,7 +48,7 @@ make up
 make down
 ```
 
-## Отдельные контуры запуска
+## Отдельные контуры
 
 Только `notification-service` и его PostgreSQL:
 
@@ -82,72 +72,203 @@ make auth-down
 make auth-notification-e2e-test
 ```
 
-## Порты сервисов
+## Сервисы
 
-- api-gateway: `8080`
-- auth-service: `8081`
-- user-asset-service: `8082`
-- api-integration-service: `8083`
-- catalog-service: `8084`
-- notification-service: `8085`
+### `api-gateway`
 
-## Порты PostgreSQL
+- Назначение: внешний вход в систему и маршрутизация запросов.
+- Порт: `8080`
+- Состояние: рабочий gateway-фасад без собственной БД.
+- Публичные группы маршрутов:
+  - `/api/auth/*`
+  - `/api/users/*`
+  - `/api/items/*`
+  - `/api/market/*`
+  - `/api/notifications/*`
+- Особенности:
+  - проксирует доменные сервисы
+  - защищает JWT-мидлварью `/api/users/*` и `/api/notifications/*`
 
-- auth DB: `5433`
-- user-asset DB: `5434`
-- catalog DB: `5436`
-- notification DB: `5437`
+### `auth-service`
 
-`api-gateway` и `api-integration-service` работают без собственной БД.
+- Назначение: аутентификация и account lifecycle.
+- Порт: `8081`
+- Состояние: рабочий MVP+.
+- Основные endpoint'ы:
+  - `GET /health`
+  - `POST /register`
+  - `POST /login`
+  - `POST /refresh`
+  - `POST /password/reset/request`
+  - `POST /password/reset/confirm`
+  - `POST /email/verify`
+- Хранит:
+  - `users`
+  - `refresh_tokens`
+  - `password_reset_tokens`
+  - `email_verification_tokens`
+- Особенность:
+  - токены reset/verification не отдаются наружу, а уходят через `notification-service`
+
+### `user-asset-service`
+
+- Назначение: пользовательский cloud-state.
+- Порт: `8082`
+- Состояние: рабочий service для profile/watchlist/preferences.
+- Основные endpoint'ы:
+  - `GET /health`
+  - `POST /users`
+  - `GET /users/:id`
+  - `PUT /users/:id`
+  - `GET /watchlist`
+  - `POST /watchlist`
+  - `DELETE /watchlist/:id`
+  - `GET /recent`
+  - `GET /preferences`
+  - `PUT /preferences`
+- Хранит:
+  - `user_profiles`
+  - `watchlist_items`
+  - `user_preferences`
+- Особенности:
+  - хранит `display_name`, `avatar_url`, `bio`
+  - валидирует и enrich'ит item refs через `catalog-service`
+
+### `api-integration-service`
+
+- Назначение: runtime-доступ к внешним API и sync metadata в каталог.
+- Порт: `8083`
+- Состояние: рабочий integration-layer без собственной БД.
+- Основные endpoint'ы:
+  - `GET /health`
+  - `GET /search`
+  - `GET /items/:id`
+  - `GET /items/:id/prices`
+  - `GET /items/:id/top-price`
+  - `POST /internal/sync/item`
+  - `POST /internal/sync/search`
+- Особенности:
+  - нормализует внешние item/pricing ответы в единый DTO
+  - поддерживает `warframe`, `eve`, `tarkov`
+  - для `tarkov` поддерживает `game_mode=regular|pve`
+  - internal sync routes закрыты через `X-Internal-Token`
+
+### `catalog-service`
+
+- Назначение: канонический локальный каталог предметов.
+- Порт: `8084`
+- Состояние: рабочий metadata-service на PostgreSQL.
+- Основные endpoint'ы:
+  - `GET /health`
+  - `POST /items`
+  - `GET /items`
+  - `GET /items/:id`
+  - `GET /items/search`
+  - `POST /items/upsert`
+  - `PUT /items/:id`
+  - `DELETE /items/:id`
+- Хранит:
+  - `items`
+  - `item_translations`
+  - `prices`
+- Особенности:
+  - локальный поиск идет по PostgreSQL
+  - `POST /items/upsert` используется importer'ом и integration sync flow
+
+### `notification-service`
+
+- Назначение: отправка email и outbox delivery.
+- Порт: `8085`
+- Состояние: рабочий notification-service.
+- Основные endpoint'ы:
+  - `GET /health`
+  - `POST /send-email`
+- Хранит:
+  - `notification_outbox`
+- Особенности:
+  - поддерживает `mock` provider
+  - поддерживает `Resend`
+
+### `tools/catalog-importer`
+
+- Назначение: пакетный импорт каталога из внешних источников.
+- Формат запуска:
+  - `catalog-importer -source warframe|eve|tarkov`
+- Состояние: рабочий importer для `warframe`, `eve`, `tarkov`.
+- Особенности:
+  - потоковый импорт предметов
+  - пишет базовые `en` поля и `ru` локализации
 
 ## Что уже реализовано
 
-- production-like skeleton для всех сервисов и утилиты
-- единый каркас: конфиг из env, логирование, HTTP, repository layer
-- health endpoint во всех сервисах
-- единый shared middleware: request id, logging, JWT auth validation
-- абстракции адаптеров маркетплейсов
-- `auth-service` с рабочими flow: register, login, refresh, password reset, email verification
-- интеграция `auth-service -> notification-service`
-- `notification-service` с PostgreSQL outbox, `mock` provider и рабочей интеграцией с Resend
-- `user-asset-service` с рабочим cloud-state flow для profile/watchlist/preferences
-- связка `user-asset-service <-> catalog-service` для watchlist validation/enrichment
-- `catalog-service` с рабочими CRUD/search endpoint'ами, PostgreSQL persistence и локализациями
-- `catalog-service` с ingestion endpoint `POST /items/upsert` для внешнего наполнения каталога
-- локальный поиск по каталогу через PostgreSQL по `name` и `translations.name`
-- `api-integration-service` с рабочими адаптерами `warframe`, `eve`, `tarkov`
-- normalized runtime endpoint'ы `GET /search`, `GET /items/:id`, `GET /items/:id/prices`, `GET /items/:id/top-price`
-- поддержка `tarkov game_mode=regular|pve`
-- `tools/catalog-importer` с рабочим импортом `warframe`, `eve`, `tarkov`
-- полный импорт metadata и `ru` локализаций для `warframe`, `eve`, `tarkov` уже подтвержден live-прогонами
-- unit, integration и live e2e тесты для связки `auth-service -> notification-service`
-- deploy-папка с docker-compose для локальной разработки на Mac
+- рабочий многосервисный backend-контур
+- единый shared middleware: request id, logging, JWT validation, internal token validation
+- связка `auth-service -> notification-service`
+- связка `user-asset-service <-> catalog-service`
+- связка `api-integration-service <-> catalog-service`
+- `api-gateway -> domain services`
+- runtime pricing и metadata fetch для `warframe`, `eve`, `tarkov`
+- локальный каталог с search и локализациями
+- smoke, unit, integration и частично live e2e тесты по основным контурам
 
-## Что пока заглушка
+## Что еще не закрыто
 
-- полное покрытие защищенных внутренних route'ов auth middleware
-- scheduler/runner для регулярного sync через `api-integration-service`
-- backup orchestration перед full catalog sync
-- frontend вынесен в отдельный репозиторий
+- полный rollout internal auth для всех внутренних чувствительных route'ов
+- scheduler/runner для регулярного sync
+- backup flow перед full catalog sync
+- historical pricing storage для аналитики и дашбордов
+- frontend живет отдельно и не входит в этот репозиторий
 
-## Подход к данным
+## Порты
 
-БД оставлены только в сервисах, где хранится состояние в текущем этапе:
-`auth-service`, `user-asset-service`, `catalog-service`, `notification-service`.
+Сервисы:
 
-## Полезные документы
+- `api-gateway`: `8080`
+- `auth-service`: `8081`
+- `user-asset-service`: `8082`
+- `api-integration-service`: `8083`
+- `catalog-service`: `8084`
+- `notification-service`: `8085`
 
-- `docs/architecture.md` — текущее распределение ролей между сервисами
-- `docs/services.md` — краткая сводка по endpoint'ам и состоянию сервисов
-- `docs/roadmap.md` — общий roadmap и ближайшие приоритеты
-- `services/auth-service/progress.md` — актуальный статус auth flow
-- `services/auth-service/docs/openapi.yaml` — OpenAPI `auth-service`
-- `services/notification-service/progress.md` — актуальный статус notification flow
-- `services/notification-service/docs/openapi.yaml` — OpenAPI `notification-service`
-- `services/catalog-service/progress.md` — актуальный статус catalog flow
-- `services/catalog-service/docs/openapi.yaml` — OpenAPI `catalog-service`
-- `services/api-integration-service/README.md` — актуальный статус integration flow
-- `services/api-integration-service/docs/openapi.yaml` — OpenAPI `api-integration-service`
-- `services/user-asset-service/README.md` — актуальный статус user-state flow
-- `services/user-asset-service/docs/openapi.yaml` — OpenAPI `user-asset-service`
-- `tools/catalog-importer/README.md` — гайд по импорту `warframe`, `eve`, `tarkov`
+PostgreSQL:
+
+- `auth`: `5433`
+- `user-asset`: `5434`
+- `catalog`: `5436`
+- `notification`: `5437`
+
+`api-gateway` и `api-integration-service` работают без собственной БД.
+
+## Документация
+
+Требования и архитектура:
+
+- `docs/requirements/TZ.md`
+- `docs/requirements/architecture.md`
+- `docs/requirements/stack.md`
+
+Текущее управление работой:
+
+- `docs/backlog/roadmap.md`
+- `docs/backlog/bug-log.md`
+- `docs/scenarios/smoke-scenarios.md`
+
+OpenAPI:
+
+- `services/auth-service/docs/openapi.yaml`
+- `services/user-asset-service/docs/openapi.yaml`
+- `services/catalog-service/docs/openapi.yaml`
+- `services/api-integration-service/docs/openapi.yaml`
+- `services/notification-service/docs/openapi.yaml`
+
+Сервисные README:
+
+- `services/api-gateway/README.md`
+- `services/api-integration-service/README.md`
+- `services/catalog-service/README.md`
+- `services/user-asset-service/README.md`
+- `services/notification-service/README.md`
+
+Инструменты:
+
+- `tools/catalog-importer/README.md`

@@ -1,0 +1,22 @@
+FROM golang:1.23-alpine AS builder
+
+WORKDIR /src
+
+COPY shared/httpmiddleware ./shared/httpmiddleware
+COPY services/api-integration-service ./services/api-integration-service
+
+WORKDIR /src/services/api-integration-service
+RUN go mod download
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/server ./cmd/server
+
+FROM alpine:3.20
+
+RUN adduser -D appuser
+USER appuser
+WORKDIR /home/appuser
+
+COPY --from=builder /out/server ./server
+
+EXPOSE 8083
+
+CMD ["./server"]

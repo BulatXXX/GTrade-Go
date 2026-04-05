@@ -192,7 +192,7 @@ curl -sS -X POST http://localhost:8084/items/upsert \
 
 ## Технологические ограничения
 
-При реализации нужно соблюдать общий стек проекта из `docs/stack.md`:
+При реализации нужно соблюдать общий стек проекта из `docs/requirements/stack.md`:
 
 - HTTP: Gin
 - Logging: zerolog
