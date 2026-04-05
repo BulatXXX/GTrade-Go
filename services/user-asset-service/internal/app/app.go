@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"gtrade/services/user-asset-service/internal/client/catalog"
 	"gtrade/services/user-asset-service/internal/config"
 	"gtrade/services/user-asset-service/internal/handler"
 	httpserver "gtrade/services/user-asset-service/internal/http"
@@ -33,7 +34,8 @@ func Run(ctx context.Context) error {
 	defer pool.Close()
 
 	repo := repository.NewUserAssetRepository(pool)
-	userAssetService := service.NewUserAssetService(repo)
+	catalogClient := catalog.New(cfg.CatalogURL)
+	userAssetService := service.NewUserAssetService(repo, catalogClient)
 	h := handler.New(cfg.ServiceName, userAssetService)
 	r := httpserver.NewRouter(logger, h)
 

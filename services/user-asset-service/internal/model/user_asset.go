@@ -33,11 +33,21 @@ type UserProfileResponse struct {
 	UpdatedAt   string `json:"updated_at"`
 }
 
+type CatalogItemSummary struct {
+	ID       string `json:"id"`
+	Game     string `json:"game"`
+	Source   string `json:"source"`
+	Name     string `json:"name"`
+	Slug     string `json:"slug"`
+	ImageURL string `json:"image_url"`
+}
+
 type WatchlistItemResponse struct {
-	ID        int64  `json:"id"`
-	UserID    int64  `json:"user_id"`
-	ItemID    string `json:"item_id"`
-	CreatedAt string `json:"created_at"`
+	ID        int64               `json:"id"`
+	UserID    int64               `json:"user_id"`
+	ItemID    string              `json:"item_id"`
+	Item      *CatalogItemSummary `json:"item,omitempty"`
+	CreatedAt string              `json:"created_at"`
 }
 
 type PreferencesResponse struct {

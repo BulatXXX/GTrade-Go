@@ -2,14 +2,21 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
+	"gtrade/services/user-asset-service/internal/client/catalog"
 	"gtrade/services/user-asset-service/internal/repository"
 )
 
 type UserAssetService struct {
-	repo userAssetRepository
+	repo    userAssetRepository
+	catalog catalogClient
+}
+
+type catalogClient interface {
+	GetItem(ctx context.Context, id string) (*catalog.Item, error)
 }
 
 type userAssetRepository interface {
@@ -24,8 +31,8 @@ type userAssetRepository interface {
 	UpsertPreferences(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error)
 }
 
-func NewUserAssetService(repo userAssetRepository) *UserAssetService {
-	return &UserAssetService{repo: repo}
+func NewUserAssetService(repo userAssetRepository, catalog catalogClient) *UserAssetService {
+	return &UserAssetService{repo: repo, catalog: catalog}
 }
 
 func (s *UserAssetService) CreateUser(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*repository.UserProfile, error) {
@@ -59,6 +66,9 @@ func (s *UserAssetService) ListWatchlist(ctx context.Context, userID int64) ([]r
 func (s *UserAssetService) AddWatchlistItem(ctx context.Context, userID int64, itemID string) (*repository.WatchlistItem, error) {
 	if userID <= 0 || strings.TrimSpace(itemID) == "" {
 		return nil, fmt.Errorf("user_id and item_id are required")
+	}
+	if _, err := s.requireCatalogItem(ctx, itemID); err != nil {
+		return nil, err
 	}
 	return s.repo.AddWatchlistItem(ctx, userID, strings.TrimSpace(itemID))
 }
@@ -96,4 +106,25 @@ func (s *UserAssetService) UpdatePreferences(ctx context.Context, userID int64, 
 		currency = "credits"
 	}
 	return s.repo.UpsertPreferences(ctx, userID, currency, notificationsEnabled)
+}
+
+func (s *UserAssetService) GetCatalogItem(ctx context.Context, itemID string) (*catalog.Item, error) {
+	return s.requireCatalogItem(ctx, itemID)
+}
+
+func (s *UserAssetService) requireCatalogItem(ctx context.Context, itemID string) (*catalog.Item, error) {
+	if s.catalog == nil {
+		return nil, fmt.Errorf("catalog client is not configured")
+	}
+	item, err := s.catalog.GetItem(ctx, itemID)
+	if err != nil {
+		if errors.Is(err, catalog.ErrNotFound) {
+			return nil, fmt.Errorf("catalog item not found")
+		}
+		return nil, err
+	}
+	if item == nil || !item.IsActive {
+		return nil, fmt.Errorf("catalog item not found")
+	}
+	return item, nil
 }

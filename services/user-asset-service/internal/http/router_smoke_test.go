@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"gtrade/services/user-asset-service/internal/client/catalog"
 	"gtrade/services/user-asset-service/internal/handler"
 	"gtrade/services/user-asset-service/internal/repository"
 )
@@ -25,6 +26,7 @@ type stubUserAssetService struct {
 	listRecentFn          func(ctx context.Context, userID int64) ([]repository.WatchlistItem, error)
 	getPreferencesFn      func(ctx context.Context, userID int64) (*repository.UserPreferences, error)
 	updatePreferencesFn   func(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error)
+	getCatalogItemFn      func(ctx context.Context, itemID string) (*catalog.Item, error)
 }
 
 func (s stubUserAssetService) CreateUser(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*repository.UserProfile, error) {
@@ -53,6 +55,9 @@ func (s stubUserAssetService) GetPreferences(ctx context.Context, userID int64) 
 }
 func (s stubUserAssetService) UpdatePreferences(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error) {
 	return s.updatePreferencesFn(ctx, userID, currency, notificationsEnabled)
+}
+func (s stubUserAssetService) GetCatalogItem(ctx context.Context, itemID string) (*catalog.Item, error) {
+	return s.getCatalogItemFn(ctx, itemID)
 }
 
 func TestRouterSmoke_UserAssetFlows(t *testing.T) {
@@ -86,6 +91,9 @@ func TestRouterSmoke_UserAssetFlows(t *testing.T) {
 		},
 		updatePreferencesFn: func(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error) {
 			return &repository.UserPreferences{UserID: userID, Currency: currency, NotificationsEnabled: notificationsEnabled, UpdatedAt: now}, nil
+		},
+		getCatalogItemFn: func(ctx context.Context, itemID string) (*catalog.Item, error) {
+			return &catalog.Item{ID: itemID, Game: "warframe", Source: "market", Name: "Frost Prime Set", Slug: "frost_prime_set", ImageURL: "https://cdn/item.png", IsActive: true}, nil
 		},
 	}))
 
@@ -149,6 +157,9 @@ func TestRouterSmoke_ConflictOnDuplicateWatchlist(t *testing.T) {
 		updatePreferencesFn: func(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error) {
 			return nil, nil
 		},
+		getCatalogItemFn: func(ctx context.Context, itemID string) (*catalog.Item, error) {
+			return &catalog.Item{ID: itemID, IsActive: true}, nil
+		},
 	}))
 
 	req := newJSONRequest(t, http.MethodPost, "/watchlist", map[string]any{"user_id": 1, "item_id": "item-1"})
@@ -197,6 +208,7 @@ func TestRouterSmoke_NotFoundUser(t *testing.T) {
 		updatePreferencesFn: func(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error) {
 			return nil, nil
 		},
+		getCatalogItemFn: func(ctx context.Context, itemID string) (*catalog.Item, error) { return nil, nil },
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/users/99", nil)
@@ -204,5 +216,37 @@ func TestRouterSmoke_NotFoundUser(t *testing.T) {
 	router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+}
+
+func TestRouterSmoke_CreateWatchlistFailsWhenCatalogItemMissing(t *testing.T) {
+	t.Parallel()
+
+	router := NewRouter(zerolog.Nop(), handler.New("user-asset-service", stubUserAssetService{
+		createUserFn: func(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*repository.UserProfile, error) {
+			return nil, nil
+		},
+		getUserFn: func(ctx context.Context, userID int64) (*repository.UserProfile, error) { return nil, nil },
+		updateUserFn: func(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*repository.UserProfile, error) {
+			return nil, nil
+		},
+		listWatchlistFn: func(ctx context.Context, userID int64) ([]repository.WatchlistItem, error) { return nil, nil },
+		addWatchlistItemFn: func(ctx context.Context, userID int64, itemID string) (*repository.WatchlistItem, error) {
+			return nil, errors.New("catalog item not found")
+		},
+		deleteWatchlistItemFn: func(ctx context.Context, userID, watchlistID int64) (bool, error) { return false, nil },
+		listRecentFn:          func(ctx context.Context, userID int64) ([]repository.WatchlistItem, error) { return nil, nil },
+		getPreferencesFn:      func(ctx context.Context, userID int64) (*repository.UserPreferences, error) { return nil, nil },
+		updatePreferencesFn: func(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error) {
+			return nil, nil
+		},
+		getCatalogItemFn: func(ctx context.Context, itemID string) (*catalog.Item, error) { return nil, nil },
+	}))
+
+	req := newJSONRequest(t, http.MethodPost, "/watchlist", map[string]any{"user_id": 1, "item_id": "missing-item"})
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 }

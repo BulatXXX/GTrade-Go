@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -55,7 +56,7 @@ func (h *Handler) GetUser(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"user":      toUserProfileResponse(*profile),
-		"watchlist": toWatchlistResponse(watchlist),
+		"watchlist": h.toWatchlistResponse(c.Request.Context(), watchlist),
 	})
 }
 
@@ -96,7 +97,7 @@ func (h *Handler) GetWatchlist(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list watchlist"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"items": toWatchlistResponse(items)})
+	c.JSON(http.StatusOK, gin.H{"items": h.toWatchlistResponse(c.Request.Context(), items)})
 }
 
 func (h *Handler) CreateWatchlist(c *gin.Context) {
@@ -116,7 +117,7 @@ func (h *Handler) CreateWatchlist(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, toWatchlistItemResponse(*item))
+	c.JSON(http.StatusCreated, h.toWatchlistItemResponse(c.Request.Context(), *item))
 }
 
 func (h *Handler) DeleteWatchlist(c *gin.Context) {
@@ -156,7 +157,7 @@ func (h *Handler) GetRecent(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"items": toWatchlistResponse(items)})
+	c.JSON(http.StatusOK, gin.H{"items": h.toWatchlistResponse(c.Request.Context(), items)})
 }
 
 func (h *Handler) GetPreferences(c *gin.Context) {
@@ -211,21 +212,32 @@ func parseUserIDQuery(c *gin.Context) (int64, bool) {
 	return userID, true
 }
 
-func toWatchlistResponse(items []repository.WatchlistItem) []model.WatchlistItemResponse {
+func (h *Handler) toWatchlistResponse(ctx context.Context, items []repository.WatchlistItem) []model.WatchlistItemResponse {
 	out := make([]model.WatchlistItemResponse, 0, len(items))
 	for _, it := range items {
-		out = append(out, toWatchlistItemResponse(it))
+		out = append(out, h.toWatchlistItemResponse(ctx, it))
 	}
 	return out
 }
 
-func toWatchlistItemResponse(it repository.WatchlistItem) model.WatchlistItemResponse {
-	return model.WatchlistItemResponse{
+func (h *Handler) toWatchlistItemResponse(ctx context.Context, it repository.WatchlistItem) model.WatchlistItemResponse {
+	resp := model.WatchlistItemResponse{
 		ID:        it.ID,
 		UserID:    it.UserID,
 		ItemID:    it.ItemID,
 		CreatedAt: it.CreatedAt.Format(timeFormat),
 	}
+	if item, err := h.userAssetService.GetCatalogItem(ctx, it.ItemID); err == nil && item != nil {
+		resp.Item = &model.CatalogItemSummary{
+			ID:       item.ID,
+			Game:     item.Game,
+			Source:   item.Source,
+			Name:     item.Name,
+			Slug:     item.Slug,
+			ImageURL: item.ImageURL,
+		}
+	}
+	return resp
 }
 
 func toUserProfileResponse(profile repository.UserProfile) model.UserProfileResponse {

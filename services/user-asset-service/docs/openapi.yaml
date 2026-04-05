@@ -1,0 +1,442 @@
+openapi: 3.0.3
+info:
+  title: GTrade User Asset Service API
+  version: 1.0.0
+  description: OpenAPI specification for user profile, cloud watchlist and preferences.
+servers:
+  - url: http://localhost:8082
+    description: Local development
+paths:
+  /health:
+    get:
+      summary: Health check
+      tags: [health]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /users:
+    post:
+      summary: Create user profile
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /users/{id}:
+    get:
+      summary: Get user profile and watchlist
+      tags: [users]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserWithWatchlistResponse'
+        '400':
+          description: Invalid user id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      summary: Update user profile
+      tags: [users]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /watchlist:
+    get:
+      summary: Get cloud watchlist
+      tags: [watchlist]
+      parameters:
+        - in: query
+          name: user_id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Watchlist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Add item to watchlist
+      tags: [watchlist]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddWatchlistRequest'
+      responses:
+        '201':
+          description: Watchlist item created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistItem'
+        '400':
+          description: Invalid request or catalog item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Watchlist item already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /watchlist/{id}:
+    delete:
+      summary: Delete watchlist item
+      tags: [watchlist]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: user_id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Watchlist item deleted
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Watchlist item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /recent:
+    get:
+      summary: Get recent watchlist items
+      tags: [watchlist]
+      parameters:
+        - in: query
+          name: user_id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Recent watchlist items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /preferences:
+    get:
+      summary: Get user preferences
+      tags: [preferences]
+      parameters:
+        - in: query
+          name: user_id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferencesResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      summary: Update user preferences
+      tags: [preferences]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePreferencesRequest'
+      responses:
+        '200':
+          description: Preferences updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferencesResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service]
+      properties:
+        status:
+          type: string
+          example: ok
+        service:
+          type: string
+          example: user-asset-service
+    CreateUserRequest:
+      type: object
+      required: [user_id, display_name]
+      properties:
+        user_id:
+          type: integer
+          format: int64
+          example: 1
+        display_name:
+          type: string
+          example: Alice
+        avatar_url:
+          type: string
+          example: https://cdn.example.com/avatar.png
+        bio:
+          type: string
+          example: Trader
+    UpdateUserRequest:
+      type: object
+      required: [display_name]
+      properties:
+        display_name:
+          type: string
+          example: Alice Updated
+        avatar_url:
+          type: string
+          example: https://cdn.example.com/avatar-2.png
+        bio:
+          type: string
+          example: Collector
+    AddWatchlistRequest:
+      type: object
+      required: [user_id, item_id]
+      properties:
+        user_id:
+          type: integer
+          format: int64
+          example: 1
+        item_id:
+          type: string
+          example: item-uuid-1
+    UpdatePreferencesRequest:
+      type: object
+      required: [user_id]
+      properties:
+        user_id:
+          type: integer
+          format: int64
+          example: 1
+        currency:
+          type: string
+          example: usd
+        notifications_enabled:
+          type: boolean
+          example: true
+    UserProfileResponse:
+      type: object
+      required: [user_id, display_name, avatar_url, bio, created_at, updated_at]
+      properties:
+        user_id:
+          type: integer
+          format: int64
+          example: 1
+        display_name:
+          type: string
+          example: Alice
+        avatar_url:
+          type: string
+          example: https://cdn.example.com/avatar.png
+        bio:
+          type: string
+          example: Trader
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CatalogItemSummary:
+      type: object
+      required: [id, game, source, name, slug, image_url]
+      properties:
+        id:
+          type: string
+          example: item-uuid-1
+        game:
+          type: string
+          example: warframe
+        source:
+          type: string
+          example: market
+        name:
+          type: string
+          example: Frost Prime Set
+        slug:
+          type: string
+          example: frost_prime_set
+        image_url:
+          type: string
+          example: https://cdn.example.com/frost.png
+    WatchlistItem:
+      type: object
+      required: [id, user_id, item_id, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        user_id:
+          type: integer
+          format: int64
+          example: 1
+        item_id:
+          type: string
+          example: item-uuid-1
+        item:
+          $ref: '#/components/schemas/CatalogItemSummary'
+        created_at:
+          type: string
+          format: date-time
+    WatchlistResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WatchlistItem'
+    UserWithWatchlistResponse:
+      type: object
+      required: [user, watchlist]
+      properties:
+        user:
+          $ref: '#/components/schemas/UserProfileResponse'
+        watchlist:
+          type: array
+          items:
+            $ref: '#/components/schemas/WatchlistItem'
+    PreferencesResponse:
+      type: object
+      required: [user_id, currency, notifications_enabled, updated_at]
+      properties:
+        user_id:
+          type: integer
+          format: int64
+          example: 1
+        currency:
+          type: string
+          example: usd
+        notifications_enabled:
+          type: boolean
+          example: true
+        updated_at:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: valid user_id query param is required

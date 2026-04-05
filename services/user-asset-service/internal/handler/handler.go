@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 
+	"gtrade/services/user-asset-service/internal/client/catalog"
 	"gtrade/services/user-asset-service/internal/repository"
 )
 
@@ -21,6 +22,7 @@ type UserAssetUseCase interface {
 	ListRecent(ctx context.Context, userID int64) ([]repository.WatchlistItem, error)
 	GetPreferences(ctx context.Context, userID int64) (*repository.UserPreferences, error)
 	UpdatePreferences(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error)
+	GetCatalogItem(ctx context.Context, itemID string) (*catalog.Item, error)
 }
 
 func New(serviceName string, userAssetService UserAssetUseCase) *Handler {

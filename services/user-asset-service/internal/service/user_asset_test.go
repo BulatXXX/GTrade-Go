@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"gtrade/services/user-asset-service/internal/client/catalog"
 	"gtrade/services/user-asset-service/internal/repository"
 )
 
@@ -49,6 +50,14 @@ func (s stubRepo) UpsertPreferences(ctx context.Context, userID int64, currency 
 	return s.upsertPreferencesFn(ctx, userID, currency, notificationsEnabled)
 }
 
+type stubCatalog struct {
+	getItemFn func(ctx context.Context, id string) (*catalog.Item, error)
+}
+
+func (s stubCatalog) GetItem(ctx context.Context, id string) (*catalog.Item, error) {
+	return s.getItemFn(ctx, id)
+}
+
 func TestCreateUser_ValidatesAndTrimsProfileFields(t *testing.T) {
 	t.Parallel()
 
@@ -58,7 +67,7 @@ func TestCreateUser_ValidatesAndTrimsProfileFields(t *testing.T) {
 			gotDisplayName, gotAvatar, gotBio = displayName, avatarURL, bio
 			return &repository.UserProfile{UserID: userID, DisplayName: displayName, AvatarURL: avatarURL, Bio: bio}, nil
 		},
-	})
+	}, stubCatalog{getItemFn: func(ctx context.Context, id string) (*catalog.Item, error) { return nil, nil }})
 
 	_, err := svc.CreateUser(context.Background(), 1, "  Alice  ", " https://cdn/avatar.png ", " hi ")
 	if err != nil {
@@ -78,7 +87,9 @@ func TestAddWatchlistItem_UsesStringItemID(t *testing.T) {
 			gotItemID = itemID
 			return &repository.WatchlistItem{ID: 1, UserID: userID, ItemID: itemID}, nil
 		},
-	})
+	}, stubCatalog{getItemFn: func(ctx context.Context, id string) (*catalog.Item, error) {
+		return &catalog.Item{ID: id, IsActive: true}, nil
+	}})
 
 	_, err := svc.AddWatchlistItem(context.Background(), 42, "item-uuid-1")
 	if err != nil {
@@ -99,7 +110,7 @@ func TestGetPreferences_CreatesDefaultPreferences(t *testing.T) {
 		upsertPreferencesFn: func(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error) {
 			return &repository.UserPreferences{UserID: userID, Currency: currency, NotificationsEnabled: notificationsEnabled, UpdatedAt: time.Now()}, nil
 		},
-	})
+	}, stubCatalog{getItemFn: func(ctx context.Context, id string) (*catalog.Item, error) { return nil, nil }})
 
 	prefs, err := svc.GetPreferences(context.Background(), 7)
 	if err != nil {
@@ -113,7 +124,7 @@ func TestGetPreferences_CreatesDefaultPreferences(t *testing.T) {
 func TestUpdateUser_ValidatesRequiredFields(t *testing.T) {
 	t.Parallel()
 
-	svc := NewUserAssetService(stubRepo{})
+	svc := NewUserAssetService(stubRepo{}, stubCatalog{getItemFn: func(ctx context.Context, id string) (*catalog.Item, error) { return nil, nil }})
 	_, err := svc.UpdateUser(context.Background(), 0, "", "", "")
 	if err == nil {
 		t.Fatal("expected validation error")
@@ -129,7 +140,7 @@ func TestDeleteWatchlistItem_Delegates(t *testing.T) {
 			gotUserID, gotWatchlistID = userID, watchlistID
 			return true, nil
 		},
-	})
+	}, stubCatalog{getItemFn: func(ctx context.Context, id string) (*catalog.Item, error) { return nil, nil }})
 
 	deleted, err := svc.DeleteWatchlistItem(context.Background(), 5, 8)
 	if err != nil {
@@ -147,9 +158,29 @@ func TestGetUser_PropagatesRepositoryError(t *testing.T) {
 		getUserFn: func(ctx context.Context, userID int64) (*repository.UserProfile, error) {
 			return nil, errors.New("boom")
 		},
-	})
+	}, stubCatalog{getItemFn: func(ctx context.Context, id string) (*catalog.Item, error) { return nil, nil }})
 
 	_, err := svc.GetUser(context.Background(), 1)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestAddWatchlistItem_FailsWhenCatalogItemMissing(t *testing.T) {
+	t.Parallel()
+
+	svc := NewUserAssetService(stubRepo{
+		addWatchlistItemFn: func(ctx context.Context, userID int64, itemID string) (*repository.WatchlistItem, error) {
+			t.Fatal("repository should not be called")
+			return nil, nil
+		},
+	}, stubCatalog{
+		getItemFn: func(ctx context.Context, id string) (*catalog.Item, error) {
+			return nil, catalog.ErrNotFound
+		},
+	})
+
+	_, err := svc.AddWatchlistItem(context.Background(), 42, "missing-item")
 	if err == nil {
 		t.Fatal("expected error")
 	}
