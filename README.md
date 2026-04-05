@@ -114,6 +114,9 @@ make auth-notification-e2e-test
 - `catalog-service` с рабочими CRUD/search endpoint'ами, PostgreSQL persistence и локализациями
 - `catalog-service` с ingestion endpoint `POST /items/upsert` для внешнего наполнения каталога
 - локальный поиск по каталогу через PostgreSQL по `name` и `translations.name`
+- `api-integration-service` с рабочими адаптерами `warframe`, `eve`, `tarkov`
+- normalized runtime endpoint'ы `GET /search`, `GET /items/:id`, `GET /items/:id/prices`, `GET /items/:id/top-price`
+- поддержка `tarkov game_mode=regular|pve`
 - `tools/catalog-importer` с рабочим импортом `warframe`, `eve`, `tarkov`
 - полный импорт metadata и `ru` локализаций для `warframe`, `eve`, `tarkov` уже подтвержден live-прогонами
 - unit, integration и live e2e тесты для связки `auth-service -> notification-service`
@@ -123,7 +126,6 @@ make auth-notification-e2e-test
 
 - реальный reverse proxy / service client flow в gateway
 - полное покрытие защищенных внутренних route'ов auth middleware
-- значительная часть `api-integration-service`
 - значительная часть `api-gateway`
 - frontend вынесен в отдельный репозиторий
 
@@ -140,4 +142,5 @@ make auth-notification-e2e-test
 - `services/auth-service/progress.md` — актуальный статус auth flow
 - `services/notification-service/progress.md` — актуальный статус notification flow
 - `services/catalog-service/progress.md` — актуальный статус catalog flow
+- `services/api-integration-service/README.md` — актуальный статус integration flow
 - `tools/catalog-importer/README.md` — гайд по импорту `warframe`, `eve`, `tarkov`

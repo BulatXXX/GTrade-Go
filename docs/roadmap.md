@@ -87,15 +87,27 @@
 
 ### Приоритет 2. api-integration-service
 
-Нужно сделать:
+Что уже сделано:
 
-- минимально рабочий поиск по внешним источникам
-- минимально рабочее получение данных по предмету
-- минимально рабочее получение top price или эквивалентного ценового ответа
+- рабочий provider registry и service layer
+- `warframe` search / item / pricing
+- `eve` item / pricing
+- `tarkov` search / item / pricing
+- normalized endpoint'ы `GET /search`, `GET /items/:id`, `GET /items/:id/prices`, `GET /items/:id/top-price`
+- поддержка `tarkov game_mode=regular|pve`
+- service/unit/provider/HTTP tests
+
+Что осталось:
+
+- уточнить сценарий `catalog-service <-> api-integration-service`
+- решить, нужен ли sync flow для обновления локального каталога через integration layer
+- решить, нужен ли storage для historical pricing snapshots и analytics
+- при необходимости расширить pricing endpoint'ы под dashboard-specific метрики
+- добавить internal auth для будущих sync/internal endpoint'ов
 
 Цель:
 
-- получить самостоятельный сервис, который реально ходит во внешние источники, а не просто отвечает placeholder
+- получить самостоятельный сервис, который уже реально ходит во внешние источники и становится слоем нормализации внешних item/pricing данных
 
 ### Приоритет 3. user-asset-service
 

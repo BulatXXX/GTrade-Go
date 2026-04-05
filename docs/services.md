@@ -43,13 +43,21 @@
 ## api-integration-service
 - Назначение: интеграция с внешними маркетплейсами и адаптеры.
 - Порт: `8083`
-- Текущее состояние: placeholder.
+- Текущее состояние: рабочий runtime integration service без собственной БД.
 - Основные endpoint'ы:
   - `GET /health`
   - `GET /search`
   - `GET /items/:id`
+  - `GET /items/:id/prices`
   - `GET /items/:id/top-price`
-- Что хранит: не хранит состояние в текущем skeleton.
+- Что хранит: не хранит состояние в текущем этапе.
+- Особенность:
+  - нормализует внешние item/pricing ответы в единый DTO
+  - для `tarkov` поддерживает `game_mode=regular|pve`, по умолчанию `regular`
+  - для `warframe` умеет искать предметы, получать item card и цены через `warframe.market`
+  - для `eve` получает item card и цены через `ESI`, а поиск должен идти через локальный `catalog-service`
+  - `GET /items/:id/prices` возвращает полный normalized pricing snapshot
+  - `GET /items/:id/top-price` возвращает сокращенный ответ с одним главным значением цены
 
 ## catalog-service
 - Назначение: канонический каталог предметов, локализации и локальный поиск.

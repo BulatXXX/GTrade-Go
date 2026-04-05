@@ -10,7 +10,7 @@
 Сервис пользовательских активов: watchlist, недавние данные, предпочтения. Имеет рабочий CRUD-контур поверх PostgreSQL.
 
 ## api-integration-service
-Слой интеграции с внешними торговыми площадками через адаптеры (`warframe`, `eve`, `tarkov`). В текущем состоянии в основном остается placeholder и работает без БД.
+Слой runtime-интеграции с внешними торговыми площадками через адаптеры (`warframe`, `eve`, `tarkov`). Работает без собственной БД, выбирает provider по `game`, нормализует item data и pricing data в единый DTO. Для `tarkov` дополнительно учитывает `game_mode=regular|pve`. Для `eve` поиск должен оставаться в локальном `catalog-service`, а этот сервис отвечает за внешнюю item card и pricing fetch.
 
 ## catalog-service
 Канонический каталог предметов: CRUD, поиск, локализации, ingestion через `POST /items/upsert`. Работает поверх PostgreSQL и уже используется как локальный source of truth для item metadata.
@@ -45,3 +45,11 @@ Middleware:
 3. `catalog-service` хранит базовые поля в `items`
 4. `catalog-service` хранит локализации в `item_translations`
 5. поиск предметов выполняется локально в PostgreSQL через `GET /items/search`
+
+Дополнительно уже есть рабочий runtime flow для внешних pricing/item данных:
+
+1. клиент или соседний сервис вызывает `api-integration-service`
+2. `api-integration-service` выбирает provider по `game`
+3. provider ходит во внешний API (`warframe.market`, `ESI`, `tarkov.dev`)
+4. ответ приводится к общему item/pricing контракту
+5. для `tarkov` один и тот же `item id` может давать разные цены в `regular` и `pve`
