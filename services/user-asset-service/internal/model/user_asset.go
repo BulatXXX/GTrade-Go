@@ -3,11 +3,19 @@ package model
 type CreateUserRequest struct {
 	UserID      int64  `json:"user_id"`
 	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
+	Bio         string `json:"bio"`
+}
+
+type UpdateUserRequest struct {
+	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
+	Bio         string `json:"bio"`
 }
 
 type AddWatchlistRequest struct {
-	UserID int64 `json:"user_id"`
-	ItemID int64 `json:"item_id"`
+	UserID int64  `json:"user_id"`
+	ItemID string `json:"item_id"`
 }
 
 type UpdatePreferencesRequest struct {
@@ -19,12 +27,16 @@ type UpdatePreferencesRequest struct {
 type UserProfileResponse struct {
 	UserID      int64  `json:"user_id"`
 	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
+	Bio         string `json:"bio"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
 }
 
 type WatchlistItemResponse struct {
 	ID        int64  `json:"id"`
 	UserID    int64  `json:"user_id"`
-	ItemID    int64  `json:"item_id"`
+	ItemID    string `json:"item_id"`
 	CreatedAt string `json:"created_at"`
 }
 

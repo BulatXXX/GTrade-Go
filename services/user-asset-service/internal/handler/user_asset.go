@@ -17,7 +17,7 @@ func (h *Handler) CreateUser(c *gin.Context) {
 		return
 	}
 
-	profile, err := h.userAssetService.CreateUser(c.Request.Context(), req.UserID, req.DisplayName)
+	profile, err := h.userAssetService.CreateUser(c.Request.Context(), req.UserID, req.DisplayName, req.AvatarURL, req.Bio)
 	if err != nil {
 		if errors.Is(err, repository.ErrDuplicate) {
 			c.JSON(http.StatusConflict, gin.H{"error": "user already exists"})
@@ -27,7 +27,7 @@ func (h *Handler) CreateUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, model.UserProfileResponse{UserID: profile.UserID, DisplayName: profile.DisplayName})
+	c.JSON(http.StatusCreated, toUserProfileResponse(*profile))
 }
 
 func (h *Handler) GetUser(c *gin.Context) {
@@ -54,12 +54,35 @@ func (h *Handler) GetUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"user": gin.H{
-			"user_id":      profile.UserID,
-			"display_name": profile.DisplayName,
-		},
+		"user":      toUserProfileResponse(*profile),
 		"watchlist": toWatchlistResponse(watchlist),
 	})
+}
+
+func (h *Handler) UpdateUser(c *gin.Context) {
+	userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || userID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	var req model.UpdateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	profile, err := h.userAssetService.UpdateUser(c.Request.Context(), userID, req.DisplayName, req.AvatarURL, req.Bio)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if profile == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, toUserProfileResponse(*profile))
 }
 
 func (h *Handler) GetWatchlist(c *gin.Context) {
@@ -202,5 +225,16 @@ func toWatchlistItemResponse(it repository.WatchlistItem) model.WatchlistItemRes
 		UserID:    it.UserID,
 		ItemID:    it.ItemID,
 		CreatedAt: it.CreatedAt.Format(timeFormat),
+	}
+}
+
+func toUserProfileResponse(profile repository.UserProfile) model.UserProfileResponse {
+	return model.UserProfileResponse{
+		UserID:      profile.UserID,
+		DisplayName: profile.DisplayName,
+		AvatarURL:   profile.AvatarURL,
+		Bio:         profile.Bio,
+		CreatedAt:   profile.CreatedAt.Format(timeFormat),
+		UpdatedAt:   profile.UpdatedAt.Format(timeFormat),
 	}
 }

@@ -16,13 +16,16 @@ var ErrDuplicate = errors.New("duplicate")
 type UserProfile struct {
 	UserID      int64
 	DisplayName string
+	AvatarURL   string
+	Bio         string
 	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type WatchlistItem struct {
 	ID        int64
 	UserID    int64
-	ItemID    int64
+	ItemID    string
 	CreatedAt time.Time
 }
 
@@ -41,15 +44,15 @@ func NewUserAssetRepository(pool *pgxpool.Pool) *UserAssetRepository {
 	return &UserAssetRepository{pool: pool}
 }
 
-func (r *UserAssetRepository) CreateUser(ctx context.Context, userID int64, displayName string) (*UserProfile, error) {
+func (r *UserAssetRepository) CreateUser(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*UserProfile, error) {
 	query := `
-		INSERT INTO user_profiles (external_user_id, display_name)
-		VALUES ($1, $2)
-		RETURNING external_user_id, display_name, created_at
+		INSERT INTO user_profiles (external_user_id, display_name, avatar_url, bio, updated_at)
+		VALUES ($1, $2, $3, $4, NOW())
+		RETURNING external_user_id, display_name, avatar_url, bio, created_at, updated_at
 	`
 
 	var p UserProfile
-	if err := r.pool.QueryRow(ctx, query, userID, displayName).Scan(&p.UserID, &p.DisplayName, &p.CreatedAt); err != nil {
+	if err := r.pool.QueryRow(ctx, query, userID, displayName, avatarURL, bio).Scan(&p.UserID, &p.DisplayName, &p.AvatarURL, &p.Bio, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return nil, ErrDuplicate
@@ -60,13 +63,31 @@ func (r *UserAssetRepository) CreateUser(ctx context.Context, userID int64, disp
 }
 
 func (r *UserAssetRepository) GetUser(ctx context.Context, userID int64) (*UserProfile, error) {
-	query := `SELECT external_user_id, display_name, created_at FROM user_profiles WHERE external_user_id = $1`
+	query := `SELECT external_user_id, display_name, avatar_url, bio, created_at, updated_at FROM user_profiles WHERE external_user_id = $1`
 	var p UserProfile
-	if err := r.pool.QueryRow(ctx, query, userID).Scan(&p.UserID, &p.DisplayName, &p.CreatedAt); err != nil {
+	if err := r.pool.QueryRow(ctx, query, userID).Scan(&p.UserID, &p.DisplayName, &p.AvatarURL, &p.Bio, &p.CreatedAt, &p.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("get user profile: %w", err)
+	}
+	return &p, nil
+}
+
+func (r *UserAssetRepository) UpdateUser(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*UserProfile, error) {
+	query := `
+		UPDATE user_profiles
+		SET display_name = $2, avatar_url = $3, bio = $4, updated_at = NOW()
+		WHERE external_user_id = $1
+		RETURNING external_user_id, display_name, avatar_url, bio, created_at, updated_at
+	`
+
+	var p UserProfile
+	if err := r.pool.QueryRow(ctx, query, userID, displayName, avatarURL, bio).Scan(&p.UserID, &p.DisplayName, &p.AvatarURL, &p.Bio, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("update user profile: %w", err)
 	}
 	return &p, nil
 }
@@ -98,7 +119,7 @@ func (r *UserAssetRepository) ListWatchlist(ctx context.Context, userID int64) (
 	return items, nil
 }
 
-func (r *UserAssetRepository) AddWatchlistItem(ctx context.Context, userID, itemID int64) (*WatchlistItem, error) {
+func (r *UserAssetRepository) AddWatchlistItem(ctx context.Context, userID int64, itemID string) (*WatchlistItem, error) {
 	query := `
 		INSERT INTO watchlist_items (user_id, item_id)
 		VALUES ($1, $2)

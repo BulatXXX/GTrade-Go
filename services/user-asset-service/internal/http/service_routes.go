@@ -8,6 +8,7 @@ import (
 func registerServiceRoutes(r *gin.Engine, h *handler.Handler) {
 	r.POST("/users", h.CreateUser)
 	r.GET("/users/:id", h.GetUser)
+	r.PUT("/users/:id", h.UpdateUser)
 
 	r.GET("/watchlist", h.GetWatchlist)
 	r.POST("/watchlist", h.CreateWatchlist)
