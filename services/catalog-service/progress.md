@@ -29,6 +29,7 @@
 - `make`-команды для backup и restore каталога
 - рабочий внешний importer в `tools/catalog-importer`
 - проверенный live import `warframe -> catalog-service`
+- проверенный live import `eve -> catalog-service`
 
 ## Готовые endpoint'ы
 

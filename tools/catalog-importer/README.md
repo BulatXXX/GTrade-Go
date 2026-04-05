@@ -4,11 +4,12 @@ CLI-утилита наполнения `catalog-service` данными из в
 
 ## Текущий статус
 
-Сейчас реально поддержан один источник:
+Сейчас реально поддержаны источники:
 
 - `warframe`
+- `eve`
 
-Для `eve` и `tarkov` каркас источников создан, но fetch-логика еще не реализована.
+Для `tarkov` каркас источника создан, но fetch-логика еще не реализована.
 
 ## Что делает утилита
 
@@ -61,6 +62,36 @@ CLI-утилита наполнения `catalog-service` данными из в
 - ордера
 - рыночная статистика
 
+## EVE
+
+Источник `eve` использует:
+
+- список type id: `GET https://esi.evetech.net/latest/markets/prices/?datasource=tranquility`
+- карточку типа: `GET https://esi.evetech.net/latest/universe/types/{type_id}/?datasource=tranquility&language=<lang>`
+- изображение: `https://images.evetech.net/types/{type_id}/icon?size=128`
+
+Что импортируется:
+
+- `type_id` как `external_id`
+- `name`
+- `description`
+- `image_url`
+- локализованные `name`
+- локализованные `description`
+
+Что пока не импортируется:
+
+- сами рыночные цены в отдельную таблицу
+- история цен
+- объемы рынка
+
+Для `eve` используется:
+
+- `game=eve`
+- `source=esi`
+
+Важно: `markets/prices` сейчас нужен только как источник списка `type_id`. Цены из него пока не сохраняются, потому что текущий `catalog-service` хранит item metadata, а не market snapshots.
+
 ## Пошаговый гайд
 
 1. Подготовить окружение и поднять `catalog-service`:
@@ -108,6 +139,18 @@ GOCACHE=/tmp/gocache-importer go run ./cmd/catalog-importer -source warframe -ca
 GOCACHE=/tmp/gocache-importer go run ./cmd/catalog-importer -source warframe -language ru -catalog-url http://localhost:8084
 ```
 
+Короткая проверка EVE:
+
+```bash
+GOCACHE=/tmp/gocache-importer go run ./cmd/catalog-importer -source eve -limit 10 -catalog-url http://localhost:8084
+```
+
+Короткая проверка EVE с локализацией:
+
+```bash
+GOCACHE=/tmp/gocache-importer go run ./cmd/catalog-importer -source eve -language ru -limit 10 -catalog-url http://localhost:8084
+```
+
 5. Проверить результат через API.
 
 Список:
@@ -126,6 +169,12 @@ curl -sS 'http://localhost:8084/items/search?q=prime&game=warframe&limit=20&offs
 
 ```bash
 curl -sS 'http://localhost:8084/items/search?q=%D0%BF%D1%80%D0%B0%D0%B9%D0%BC&game=warframe&language=ru&limit=20&offset=0'
+```
+
+Поиск по EVE:
+
+```bash
+curl -sS 'http://localhost:8084/items/search?q=plagioclase&game=eve&language=ru&limit=20&offset=0'
 ```
 
 Получение локализованной карточки:
@@ -200,6 +249,18 @@ go run ./cmd/catalog-importer -source warframe -limit 50
 go run ./cmd/catalog-importer -source warframe -language ru -limit 50
 ```
 
+Импорт EVE:
+
+```bash
+go run ./cmd/catalog-importer -source eve -limit 50
+```
+
+Импорт EVE с локализацией:
+
+```bash
+go run ./cmd/catalog-importer -source eve -language ru -limit 50
+```
+
 Сухой прогон без записи в каталог:
 
 ```bash
@@ -224,7 +285,8 @@ go run ./cmd/catalog-importer -source warframe -catalog-url http://localhost:808
 
 - `warframe` импортирует каталог без цен
 - `warframe` импортирует item metadata и локализации, но не market orders
+- `eve` импортирует item metadata и локализации, но не сохраняет market prices
+- `eve` использует `markets/prices` только как источник списка `type_id`
 - локализация появляется в API только после прогона с соответствующим `-language`
-- `eve` пока не реализован
 - `tarkov` пока не реализован
 - утилита зависит от доступности поднятого `catalog-service`

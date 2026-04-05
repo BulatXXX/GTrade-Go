@@ -2,10 +2,13 @@ package source
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 )
+
+var ErrNotImplemented = errors.New("source is not implemented yet")
 
 type RawTranslation struct {
 	LanguageCode string
@@ -45,7 +48,7 @@ func New(cfg Config) (Source, error) {
 	case "warframe":
 		return NewWarframeSource(client, cfg.Language, cfg.Limit), nil
 	case "eve":
-		return NewEVESource(), nil
+		return NewEVESource(client, cfg.Language, cfg.Limit), nil
 	case "tarkov":
 		return NewTarkovSource(), nil
 	default:
