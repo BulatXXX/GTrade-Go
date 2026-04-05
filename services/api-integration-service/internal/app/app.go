@@ -12,6 +12,8 @@ import (
 	"gtrade/services/api-integration-service/internal/handler"
 	httpserver "gtrade/services/api-integration-service/internal/http"
 	"gtrade/services/api-integration-service/internal/repository"
+	"gtrade/services/api-integration-service/internal/service"
+	"gtrade/services/api-integration-service/internal/service/marketplace"
 )
 
 func Run(ctx context.Context) error {
@@ -32,7 +34,13 @@ func Run(ctx context.Context) error {
 		logger.Warn().Msg("DATABASE_URL is empty, postgres connection skipped")
 	}
 
-	h := handler.New(cfg.ServiceName)
+	integrationService := service.New(
+		marketplace.NewTarkovClient(),
+		marketplace.NewWarframeClient(),
+		marketplace.NewEVEClient(),
+	)
+
+	h := handler.New(cfg.ServiceName, integrationService)
 	r := httpserver.NewRouter(logger, h)
 
 	srv := &http.Server{
