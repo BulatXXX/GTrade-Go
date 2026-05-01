@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -81,8 +82,8 @@ query SearchItems($name: String!, $gameMode: GameMode!, $offset: Int!, $limit: I
 		return nil, err
 	}
 
-	items := make([]model.Item, 0, len(resp.Data.Items))
-	for _, item := range resp.Data.Items {
+	items := make([]model.Item, 0, len(resp.Items))
+	for _, item := range resp.Items {
 		items = append(items, toTarkovItem(item, query.GameMode))
 	}
 	return items, nil
@@ -148,7 +149,7 @@ func (c *TarkovClient) fetchItem(ctx context.Context, id, gameMode string) (tark
 	var resp tarkovItemResponse
 	err := c.postGraphQL(ctx, tarkovGraphQLRequest{
 		Query: `
-query ItemByID($id: String!, $gameMode: GameMode!) {
+query ItemByID($id: ID!, $gameMode: GameMode!) {
   item(id: $id, gameMode: $gameMode) {
     id
     name
@@ -180,10 +181,10 @@ query ItemByID($id: String!, $gameMode: GameMode!) {
 	if err != nil {
 		return tarkovItem{}, err
 	}
-	if resp.Data.Item.ID == "" {
+	if resp.Item.ID == "" {
 		return tarkovItem{}, ErrNotFound
 	}
-	return resp.Data.Item, nil
+	return resp.Item, nil
 }
 
 func (c *TarkovClient) postGraphQL(ctx context.Context, payload tarkovGraphQLRequest, out any) error {
@@ -211,8 +212,21 @@ func (c *TarkovClient) postGraphQL(ctx context.Context, payload tarkovGraphQLReq
 		return fmt.Errorf("unexpected status %d", resp.StatusCode)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+	var envelope struct {
+		Data   json.RawMessage      `json:"data"`
+		Errors []tarkovGraphQLError `json:"errors"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
 		return fmt.Errorf("decode response: %w", err)
+	}
+	if len(envelope.Errors) > 0 {
+		return fmt.Errorf("graphql request failed: %w", errors.Join(toTarkovGraphQLErrors(envelope.Errors)...))
+	}
+	if len(envelope.Data) == 0 || string(envelope.Data) == "null" {
+		return fmt.Errorf("graphql response missing data")
+	}
+	if err := json.Unmarshal(envelope.Data, out); err != nil {
+		return fmt.Errorf("decode graphql data: %w", err)
 	}
 	return nil
 }
@@ -277,16 +291,16 @@ type tarkovGraphQLRequest struct {
 	Variables map[string]any `json:"variables,omitempty"`
 }
 
+type tarkovGraphQLError struct {
+	Message string `json:"message"`
+}
+
 type tarkovSearchResponse struct {
-	Data struct {
-		Items []tarkovItem `json:"items"`
-	} `json:"data"`
+	Items []tarkovItem `json:"items"`
 }
 
 type tarkovItemResponse struct {
-	Data struct {
-		Item tarkovItem `json:"item"`
-	} `json:"data"`
+	Item tarkovItem `json:"item"`
 }
 
 type tarkovItem struct {
@@ -312,4 +326,22 @@ type tarkovSellFor struct {
 	Price    int    `json:"price"`
 	Source   string `json:"source"`
 	Currency string `json:"currency"`
+}
+
+func (e tarkovGraphQLError) Error() string {
+	return strings.TrimSpace(e.Message)
+}
+
+func toTarkovGraphQLErrors(values []tarkovGraphQLError) []error {
+	errs := make([]error, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value.Message) == "" {
+			continue
+		}
+		errs = append(errs, value)
+	}
+	if len(errs) == 0 {
+		errs = append(errs, errors.New("unknown graphql error"))
+	}
+	return errs
 }

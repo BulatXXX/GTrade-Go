@@ -2,6 +2,7 @@ package marketplace
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -73,6 +74,9 @@ func TestTarkovClientGetItem_MapsItemResponse(t *testing.T) {
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			body, _ := io.ReadAll(r.Body)
 			text := string(body)
+			if !strings.Contains(text, "query ItemByID($id: ID!") {
+				t.Fatalf("request body missing ID variable type: %s", text)
+			}
 			if !strings.Contains(text, `"gameMode":"regular"`) {
 				t.Fatalf("request body missing regular gameMode: %s", text)
 			}
@@ -105,6 +109,35 @@ func TestTarkovClientGetItem_MapsItemResponse(t *testing.T) {
 	}
 	if item.URL != "https://tarkov.dev/item/makarov" {
 		t.Fatalf("url = %q", item.URL)
+	}
+}
+
+func TestTarkovClientGetItem_ReturnsUpstreamGraphQLError(t *testing.T) {
+	t.Parallel()
+
+	client := NewTarkovClientWithBaseURL("https://api.example.test/graphql", &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return jsonResponse(`{
+				"errors":[
+					{"message":"Variable \"$id\" of type \"String!\" used in position expecting type \"ID\"."}
+				]
+			}`), nil
+		}),
+	})
+
+	_, err := client.GetItem(context.Background(), model.GetItemQuery{
+		Game:     "tarkov",
+		GameMode: "regular",
+		ID:       "5448bd6b4bdc2dfc2f8b4569",
+	})
+	if err == nil {
+		t.Fatal("GetItem error = nil, want graphql error")
+	}
+	if errors.Is(err, ErrNotFound) {
+		t.Fatalf("GetItem error = %v, should not be translated to not found", err)
+	}
+	if !strings.Contains(err.Error(), "expecting type \"ID\"") {
+		t.Fatalf("GetItem error = %v", err)
 	}
 }
 
