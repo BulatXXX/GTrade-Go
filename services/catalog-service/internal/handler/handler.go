@@ -14,6 +14,7 @@ type CatalogUseCase interface {
 	GetItemByID(ctx context.Context, id string) (*model.Item, error)
 	ListItems(ctx context.Context, filter model.ListItemsFilter) ([]model.Item, error)
 	SearchItems(ctx context.Context, filter model.SearchItemsFilter) ([]model.Item, error)
+	GetPriceHistory(ctx context.Context, itemID string, filter model.PriceHistoryFilter) ([]model.PriceHistoryEntry, error)
 }
 
 type Handler struct {

@@ -26,11 +26,14 @@ CREATE TABLE IF NOT EXISTS prices (
     id BIGSERIAL PRIMARY KEY,
     item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
     source TEXT NOT NULL,
+    game_mode TEXT NOT NULL DEFAULT '',
     value NUMERIC(20, 6) NOT NULL,
     currency TEXT NOT NULL,
+    collected_on DATE NOT NULL DEFAULT CURRENT_DATE,
     collected_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_prices_item_collected ON prices(item_id, collected_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_prices_item_source_mode_day ON prices(item_id, source, game_mode, collected_on);
 CREATE INDEX IF NOT EXISTS idx_items_game_source_name ON items(game, source, name);
 CREATE INDEX IF NOT EXISTS idx_item_translations_item_id ON item_translations(item_id);

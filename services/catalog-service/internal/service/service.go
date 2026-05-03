@@ -23,6 +23,9 @@ type Repository interface {
 	GetItemByID(ctx context.Context, id string) (*model.Item, error)
 	ListItems(ctx context.Context, filter model.ListItemsFilter) ([]model.Item, error)
 	SearchItems(ctx context.Context, filter model.SearchItemsFilter) ([]model.Item, error)
+	ListActiveItemsForPriceSync(ctx context.Context, limit, offset int) ([]model.Item, error)
+	UpsertPriceHistory(ctx context.Context, input model.UpsertPriceHistoryInput) error
+	GetPriceHistory(ctx context.Context, itemID string, filter model.PriceHistoryFilter) ([]model.PriceHistoryEntry, error)
 }
 
 type Service struct {
@@ -109,6 +112,51 @@ func (s *Service) SearchItems(ctx context.Context, filter model.SearchItemsFilte
 		filter.ActiveOnly = &activeOnly
 	}
 	return s.repo.SearchItems(ctx, filter)
+}
+
+func (s *Service) GetPriceHistory(ctx context.Context, itemID string, filter model.PriceHistoryFilter) ([]model.PriceHistoryEntry, error) {
+	if strings.TrimSpace(itemID) == "" || filter.Limit < 0 {
+		return nil, ErrInvalidInput
+	}
+
+	itemID = strings.TrimSpace(itemID)
+	filter.GameMode = strings.TrimSpace(filter.GameMode)
+
+	if _, err := s.repo.GetItemByID(ctx, itemID); err != nil {
+		return nil, err
+	}
+
+	if filter.Limit == 0 {
+		filter.Limit = 30
+	}
+
+	return s.repo.GetPriceHistory(ctx, itemID, filter)
+}
+
+func (s *Service) UpsertPriceHistory(ctx context.Context, input model.UpsertPriceHistoryInput) error {
+	if strings.TrimSpace(input.ItemID) == "" || strings.TrimSpace(input.Source) == "" || strings.TrimSpace(input.Currency) == "" {
+		return ErrInvalidInput
+	}
+	if input.CollectedAt.IsZero() {
+		return ErrInvalidInput
+	}
+
+	input.ItemID = strings.TrimSpace(input.ItemID)
+	input.Source = strings.TrimSpace(input.Source)
+	input.GameMode = strings.TrimSpace(input.GameMode)
+	input.Currency = strings.TrimSpace(input.Currency)
+	if input.CollectedOn.IsZero() {
+		input.CollectedOn = input.CollectedAt
+	}
+
+	return s.repo.UpsertPriceHistory(ctx, input)
+}
+
+func (s *Service) ListActiveItemsForPriceSync(ctx context.Context, limit, offset int) ([]model.Item, error) {
+	if limit < 0 || offset < 0 {
+		return nil, ErrInvalidInput
+	}
+	return s.repo.ListActiveItemsForPriceSync(ctx, limit, offset)
 }
 
 func validateCreateInput(input model.CreateItemInput) error {

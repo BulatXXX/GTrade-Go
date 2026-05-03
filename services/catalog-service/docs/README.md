@@ -15,6 +15,7 @@
 - выдавать список предметов
 - искать предметы по названию
 - поддерживать локализации имени и описания
+- хранить ежедневную историю цен по предметам
 
 `catalog-service` должен быть источником истины для item metadata и не должен сводиться к простому проксированию внешних API.
 
@@ -41,6 +42,16 @@ type ItemTranslation struct {
 	LanguageCode string
 	Name         string
 	Description  string
+}
+
+type PriceHistoryEntry struct {
+	ItemID      string
+	Source      string
+	GameMode    string
+	Value       float64
+	Currency    string
+	CollectedOn string
+	CollectedAt time.Time
 }
 ```
 
@@ -75,6 +86,8 @@ type ItemTranslation struct {
 - уникальность предмета должна задаваться по `game + source + external_id`
 - обычное удаление на текущем этапе трактуется как деактивация через `IsActive=false`
 - hard delete допустим только как внутренний административный сценарий
+- история цен хранится отдельно в `prices` и пишет не сырые market snapshots, а единое daily top-price значение
+- для одного `item_id + source + game_mode + day` хранится одна запись, повторный сбор за день обновляет ее
 
 ## План первого MVP
 
@@ -98,6 +111,7 @@ type ItemTranslation struct {
 - `GET /items/:id`
 - `GET /items`
 - `GET /items/search?q=...&game=...&language=...`
+- `GET /items/:id/prices/history?game_mode=...&limit=...`
 
 Поддержка локализаций может быть оформлена либо отдельными endpoint'ами, либо как часть `create/update` payload, но хранение должно оставаться раздельным на уровне модели.
 
@@ -155,6 +169,18 @@ curl -sS -X POST http://localhost:8084/items/upsert \
 
 `POST /items/upsert` используется `tools/catalog-importer` как ingestion endpoint.
 
+Для чтения истории цен:
+
+```bash
+curl -sS 'http://localhost:8084/items/<ITEM_ID>/prices/history?limit=30'
+```
+
+Для Tarkov можно фильтровать по режиму игры:
+
+```bash
+curl -sS 'http://localhost:8084/items/<ITEM_ID>/prices/history?game_mode=pve&limit=30'
+```
+
 Текущий подтвержденный поток наполнения каталога такой:
 
 - внешний источник отдает список предметов
@@ -167,6 +193,18 @@ curl -sS -X POST http://localhost:8084/items/upsert \
 
 - `en` карточка наполняет `items`
 - `ru` карточка наполняет `item_translations`
+
+История цен обновляется самим `catalog-service` по таймеру:
+
+- сервис проходит по активным предметам каталога
+- для каждого предмета вызывает `api-integration-service` `GET /items/:external_id/top-price`
+- для `tarkov` собирает обе ветки `regular` и `pve`
+- сохраняет одну daily запись на предмет и режим
+
+Полезные env для этого потока:
+
+- `INTEGRATION_SERVICE_URL` — базовый URL `api-integration-service`, по умолчанию `http://localhost:8083`
+- `PRICE_HISTORY_REFRESH_INTERVAL` — период фонового обновления, по умолчанию `24h`
 
 Документация по реальному импорту лежит в:
 

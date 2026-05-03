@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -268,6 +269,87 @@ func TestCatalogRepositoryIntegration_UpsertItem_PreservesTranslationsWhenOmitte
 	}
 	if len(second.Translations) != 1 || second.Translations[0].LanguageCode != "ru" || second.Translations[0].Name != "Сохранить Перевод" {
 		t.Fatalf("translations should be preserved, got %#v", second.Translations)
+	}
+}
+
+func TestCatalogRepositoryIntegration_UpsertAndReadPriceHistory(t *testing.T) {
+	ctx := context.Background()
+	pool := newCatalogTestPool(t, ctx)
+	repo := repository.NewCatalogRepository(pool)
+
+	item, err := repo.CreateItem(ctx, model.CreateItemInput{
+		Game:       "tarkov",
+		Source:     "tarkov-dev",
+		ExternalID: "5448bd6b4bdc2dfc2f8b4569",
+		Slug:       "5448bd6b4bdc2dfc2f8b4569",
+		Name:       "Makarov PM",
+	})
+	if err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+
+	firstCollectedAt := time.Date(2026, 5, 2, 12, 0, 0, 0, time.UTC)
+	if err := repo.UpsertPriceHistory(ctx, model.UpsertPriceHistoryInput{
+		ItemID:      item.ID,
+		Source:      "tarkov-dev",
+		GameMode:    "regular",
+		Value:       15000,
+		Currency:    "RUB",
+		CollectedOn: firstCollectedAt,
+		CollectedAt: firstCollectedAt,
+	}); err != nil {
+		t.Fatalf("initial upsert price history: %v", err)
+	}
+
+	secondCollectedAt := time.Date(2026, 5, 2, 18, 30, 0, 0, time.UTC)
+	if err := repo.UpsertPriceHistory(ctx, model.UpsertPriceHistoryInput{
+		ItemID:      item.ID,
+		Source:      "tarkov-dev",
+		GameMode:    "regular",
+		Value:       16000,
+		Currency:    "RUB",
+		CollectedOn: secondCollectedAt,
+		CollectedAt: secondCollectedAt,
+	}); err != nil {
+		t.Fatalf("second upsert price history: %v", err)
+	}
+
+	otherDayCollectedAt := time.Date(2026, 5, 3, 9, 0, 0, 0, time.UTC)
+	if err := repo.UpsertPriceHistory(ctx, model.UpsertPriceHistoryInput{
+		ItemID:      item.ID,
+		Source:      "tarkov-dev",
+		GameMode:    "pve",
+		Value:       22000,
+		Currency:    "RUB",
+		CollectedOn: otherDayCollectedAt,
+		CollectedAt: otherDayCollectedAt,
+	}); err != nil {
+		t.Fatalf("third upsert price history: %v", err)
+	}
+
+	regularHistory, err := repo.GetPriceHistory(ctx, item.ID, model.PriceHistoryFilter{
+		GameMode: "regular",
+		Limit:    10,
+	})
+	if err != nil {
+		t.Fatalf("get regular price history: %v", err)
+	}
+	if len(regularHistory) != 1 {
+		t.Fatalf("regular history len = %d, want 1", len(regularHistory))
+	}
+	if regularHistory[0].Value != 16000 || regularHistory[0].CollectedOn != "2026-05-02" {
+		t.Fatalf("regular history row = %#v", regularHistory[0])
+	}
+
+	allHistory, err := repo.GetPriceHistory(ctx, item.ID, model.PriceHistoryFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("get all price history: %v", err)
+	}
+	if len(allHistory) != 2 {
+		t.Fatalf("all history len = %d, want 2", len(allHistory))
+	}
+	if allHistory[0].GameMode != "pve" || allHistory[1].GameMode != "regular" {
+		t.Fatalf("unexpected history ordering/content: %#v", allHistory)
 	}
 }
 

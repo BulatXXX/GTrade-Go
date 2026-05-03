@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -322,6 +323,112 @@ func (r *CatalogRepository) SearchItems(ctx context.Context, filter model.Search
 	}
 
 	return items, nil
+}
+
+func (r *CatalogRepository) ListActiveItemsForPriceSync(ctx context.Context, limit, offset int) ([]model.Item, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, game, source, external_id, slug, name, description, image_url, is_active, created_at, updated_at
+		FROM items
+		WHERE is_active = TRUE
+		ORDER BY created_at ASC
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list active items for price sync: %w", err)
+	}
+	defer rows.Close()
+
+	var items []model.Item
+	for rows.Next() {
+		var item model.Item
+		if err := scanItemRow(rows, &item); err != nil {
+			return nil, fmt.Errorf("scan active item row: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("active item rows: %w", err)
+	}
+
+	return items, nil
+}
+
+func (r *CatalogRepository) UpsertPriceHistory(ctx context.Context, input model.UpsertPriceHistoryInput) error {
+	collectedOn := input.CollectedOn.UTC().Truncate(24 * time.Hour)
+	if collectedOn.IsZero() {
+		collectedOn = input.CollectedAt.UTC().Truncate(24 * time.Hour)
+	}
+
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO prices (item_id, source, game_mode, value, currency, collected_on, collected_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (item_id, source, game_mode, collected_on)
+		DO UPDATE SET
+			value = EXCLUDED.value,
+			currency = EXCLUDED.currency,
+			collected_at = EXCLUDED.collected_at
+	`,
+		input.ItemID,
+		input.Source,
+		input.GameMode,
+		input.Value,
+		input.Currency,
+		collectedOn,
+		input.CollectedAt.UTC(),
+	)
+	if err != nil {
+		return fmt.Errorf("upsert price history: %w", err)
+	}
+
+	return nil
+}
+
+func (r *CatalogRepository) GetPriceHistory(ctx context.Context, itemID string, filter model.PriceHistoryFilter) ([]model.PriceHistoryEntry, error) {
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 30
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT item_id, source, game_mode, value, currency, collected_on, collected_at
+		FROM prices
+		WHERE item_id = $1
+		  AND ($2 = '' OR game_mode = $2)
+		ORDER BY collected_on DESC, collected_at DESC
+		LIMIT $3
+	`, itemID, filter.GameMode, limit)
+	if err != nil {
+		return nil, fmt.Errorf("get price history: %w", err)
+	}
+	defer rows.Close()
+
+	history := make([]model.PriceHistoryEntry, 0, limit)
+	for rows.Next() {
+		var entry model.PriceHistoryEntry
+		var collectedOn time.Time
+		if err := rows.Scan(
+			&entry.ItemID,
+			&entry.Source,
+			&entry.GameMode,
+			&entry.Value,
+			&entry.Currency,
+			&collectedOn,
+			&entry.CollectedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan price history row: %w", err)
+		}
+		entry.CollectedOn = collectedOn.UTC().Format("2006-01-02")
+		history = append(history, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("price history rows: %w", err)
+	}
+
+	return history, nil
 }
 
 func (r *CatalogRepository) getItem(ctx context.Context, q queryRower, query string, args ...any) (*model.Item, error) {
