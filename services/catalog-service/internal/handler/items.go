@@ -139,6 +139,36 @@ func (h *Handler) GetItemByID(c *gin.Context) {
 	c.JSON(http.StatusOK, model.ItemResponse{Item: localizeItem(*item, language)})
 }
 
+func (h *Handler) GetPriceHistory(c *gin.Context) {
+	limit, err := parseIntQuery(c, "limit", 30)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit"})
+		return
+	}
+
+	history, err := h.catalogService.GetPriceHistory(c.Request.Context(), c.Param("id"), model.PriceHistoryFilter{
+		GameMode: c.Query("game_mode"),
+		Limit:    limit,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidInput):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid price history filter"})
+		case errors.Is(err, repository.ErrItemNotFound), errors.Is(err, service.ErrNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "item not found"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "get price history failed"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, model.PriceHistoryResponse{
+		ItemID:   c.Param("id"),
+		GameMode: c.Query("game_mode"),
+		History:  history,
+	})
+}
+
 func (h *Handler) ListItems(c *gin.Context) {
 	language := c.Query("language")
 	limit, err := parseIntQuery(c, "limit", 20)

@@ -8,11 +8,13 @@
 - `GET /items`
 - `GET /items/search`
 - `GET /items/:id`
+- `GET /items/:id/prices/history`
 - `POST /items`
 - `POST /items/upsert`
 - `PUT /items/:id`
 - `DELETE /items/:id`
 - PostgreSQL persistence для `items` и `item_translations`
+- PostgreSQL persistence для daily `prices` history
 - локальный поиск по `name` и `translations.name`
 - локализации через `item_translations`
 - ingestion flow для `catalog-importer`
@@ -25,6 +27,7 @@
 - локальный поиск предметов
 - хранение переводов и локализованных полей
 - точка записи для importer и sync flow
+- владелец historical pricing snapshots
 
 ## Важные особенности
 
@@ -32,11 +35,12 @@
 - уникальность предмета задается через `game + source + external_id`
 - `DELETE /items/:id` по умолчанию работает как soft delete через `is_active=false`
 - sync через `api-integration-service` обновляет базовую metadata и не должен сносить существующие переводы, если новые `translations` не переданы
+- history цен обновляется фоновым collector'ом внутри сервиса через `api-integration-service`
 
 ## Следующий логичный шаг
 
 - hardening backup flow перед full sync
-- уточнение стратегии хранения pricing history отдельно от metadata
+- расширение scheduler/collector, если daily sync станет тяжелым и его придется выносить в отдельный worker
 - дополнительные handler/router HTTP tests, если понадобится расширить покрытие
 
 ## Тесты

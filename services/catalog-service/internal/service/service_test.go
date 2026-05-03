@@ -239,14 +239,78 @@ func TestServiceSearchItems_DefaultsToActiveOnlyAndDelegates(t *testing.T) {
 	}
 }
 
+func TestServiceGetPriceHistory_ValidatesInputAndDelegates(t *testing.T) {
+	t.Parallel()
+
+	var gotItemID string
+	var gotFilter model.PriceHistoryFilter
+	repo := stubRepository{
+		getItemByIDFn: func(ctx context.Context, id string) (*model.Item, error) {
+			return &model.Item{ID: id, IsActive: true}, nil
+		},
+		getPriceHistoryFn: func(ctx context.Context, itemID string, filter model.PriceHistoryFilter) ([]model.PriceHistoryEntry, error) {
+			gotItemID = itemID
+			gotFilter = filter
+			return []model.PriceHistoryEntry{{ItemID: itemID, Value: 100, Currency: "RUB", CollectedOn: "2026-05-03", CollectedAt: time.Now().UTC()}}, nil
+		},
+	}
+
+	svc := New(repo)
+	history, err := svc.GetPriceHistory(context.Background(), "item-1", model.PriceHistoryFilter{GameMode: " pve ", Limit: 7})
+	if err != nil {
+		t.Fatalf("get price history: %v", err)
+	}
+	if len(history) != 1 {
+		t.Fatalf("history len = %d, want 1", len(history))
+	}
+	if gotItemID != "item-1" || gotFilter.GameMode != "pve" || gotFilter.Limit != 7 {
+		t.Fatalf("delegated item/filter = %q %#v", gotItemID, gotFilter)
+	}
+}
+
+func TestServiceUpsertPriceHistory_ValidatesAndDelegates(t *testing.T) {
+	t.Parallel()
+
+	var got model.UpsertPriceHistoryInput
+	repo := stubRepository{
+		upsertPriceHistoryFn: func(ctx context.Context, input model.UpsertPriceHistoryInput) error {
+			got = input
+			return nil
+		},
+	}
+
+	svc := New(repo)
+	collectedAt := time.Now().UTC()
+	if err := svc.UpsertPriceHistory(context.Background(), model.UpsertPriceHistoryInput{
+		ItemID:      " item-1 ",
+		Source:      " tarkov-dev ",
+		GameMode:    " regular ",
+		Value:       123,
+		Currency:    " RUB ",
+		CollectedAt: collectedAt,
+	}); err != nil {
+		t.Fatalf("upsert price history: %v", err)
+	}
+
+	if got.ItemID != "item-1" || got.Source != "tarkov-dev" || got.GameMode != "regular" || got.Currency != "RUB" {
+		t.Fatalf("delegated input = %#v", got)
+	}
+	if got.CollectedOn.IsZero() {
+		t.Fatalf("expected collected_on to be defaulted, got %#v", got)
+	}
+}
+
 type stubRepository struct {
-	createItemFn     func(ctx context.Context, input model.CreateItemInput) (*model.Item, error)
-	upsertItemFn     func(ctx context.Context, input model.CreateItemInput) (*model.Item, error)
-	updateItemFn     func(ctx context.Context, id string, input model.UpdateItemInput) (*model.Item, error)
-	deactivateItemFn func(ctx context.Context, id string) error
-	getItemByIDFn    func(ctx context.Context, id string) (*model.Item, error)
-	listItemsFn      func(ctx context.Context, filter model.ListItemsFilter) ([]model.Item, error)
-	searchItemsFn    func(ctx context.Context, filter model.SearchItemsFilter) ([]model.Item, error)
+	createItemFn         func(ctx context.Context, input model.CreateItemInput) (*model.Item, error)
+	upsertItemFn         func(ctx context.Context, input model.CreateItemInput) (*model.Item, error)
+	updateItemFn         func(ctx context.Context, id string, input model.UpdateItemInput) (*model.Item, error)
+	deactivateItemFn     func(ctx context.Context, id string) error
+	getItemByIDFn        func(ctx context.Context, id string) (*model.Item, error)
+	listItemsFn          func(ctx context.Context, filter model.ListItemsFilter) ([]model.Item, error)
+	searchItemsFn        func(ctx context.Context, filter model.SearchItemsFilter) ([]model.Item, error)
+	listPriceSyncItemsFn func(ctx context.Context, limit, offset int) ([]model.Item, error)
+	upsertPriceHistoryFn func(ctx context.Context, input model.UpsertPriceHistoryInput) error
+	getPriceHistoryFn    func(ctx context.Context, itemID string, filter model.PriceHistoryFilter) ([]model.PriceHistoryEntry, error)
 }
 
 func (s stubRepository) CreateItem(ctx context.Context, input model.CreateItemInput) (*model.Item, error) {
@@ -296,4 +360,25 @@ func (s stubRepository) SearchItems(ctx context.Context, filter model.SearchItem
 		return nil, errors.New("unexpected SearchItems call")
 	}
 	return s.searchItemsFn(ctx, filter)
+}
+
+func (s stubRepository) ListActiveItemsForPriceSync(ctx context.Context, limit, offset int) ([]model.Item, error) {
+	if s.listPriceSyncItemsFn == nil {
+		return nil, errors.New("unexpected ListActiveItemsForPriceSync call")
+	}
+	return s.listPriceSyncItemsFn(ctx, limit, offset)
+}
+
+func (s stubRepository) UpsertPriceHistory(ctx context.Context, input model.UpsertPriceHistoryInput) error {
+	if s.upsertPriceHistoryFn == nil {
+		return errors.New("unexpected UpsertPriceHistory call")
+	}
+	return s.upsertPriceHistoryFn(ctx, input)
+}
+
+func (s stubRepository) GetPriceHistory(ctx context.Context, itemID string, filter model.PriceHistoryFilter) ([]model.PriceHistoryEntry, error) {
+	if s.getPriceHistoryFn == nil {
+		return nil, errors.New("unexpected GetPriceHistory call")
+	}
+	return s.getPriceHistoryFn(ctx, itemID, filter)
 }
