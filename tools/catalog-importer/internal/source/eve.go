@@ -43,6 +43,10 @@ func (s *EVESource) Stream(ctx context.Context, consume func(RawItem) error) err
 
 	processed := 0
 	for _, entry := range priceEntries {
+		if entry.AveragePrice == nil && entry.AdjustedPrice == nil {
+			continue
+		}
+
 		baseType, err := s.fetchType(ctx, entry.TypeID, "en")
 		if err != nil {
 			if isSkippableEVETypeError(err) {
@@ -61,7 +65,7 @@ func (s *EVESource) Stream(ctx context.Context, consume func(RawItem) error) err
 			ExternalID:  externalID,
 			Slug:        buildEVESlug(baseType.Name, baseType.TypeID),
 			Name:        baseType.Name,
-			Description: strings.TrimSpace(baseType.Description),
+			Description: stripHTML(baseType.Description),
 			ImageURL:    resolveEVEImageURL(baseType.TypeID),
 		}
 
@@ -73,7 +77,7 @@ func (s *EVESource) Stream(ctx context.Context, consume func(RawItem) error) err
 				}
 			} else {
 				localizedName := strings.TrimSpace(localizedType.Name)
-				localizedDescription := strings.TrimSpace(localizedType.Description)
+				localizedDescription := stripHTML(localizedType.Description)
 				if localizedName != "" || localizedDescription != "" {
 					raw.Translations = []RawTranslation{{
 						LanguageCode: s.language,
@@ -202,7 +206,9 @@ func isSkippableEVETypeError(err error) bool {
 var errEVETypeNotFound = fmt.Errorf("eve type not found")
 
 type eveMarketPrice struct {
-	TypeID int `json:"type_id"`
+	TypeID        int      `json:"type_id"`
+	AveragePrice  *float64 `json:"average_price"`
+	AdjustedPrice *float64 `json:"adjusted_price"`
 }
 
 type eveType struct {

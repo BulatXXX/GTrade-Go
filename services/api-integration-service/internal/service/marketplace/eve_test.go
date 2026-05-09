@@ -67,6 +67,34 @@ func TestEVEClientGetItem_MapsTypeCard(t *testing.T) {
 	}
 }
 
+func TestEVEClientGetItem_StripsHTMLFromDescription(t *testing.T) {
+	t.Parallel()
+
+	client := NewEVEClientWithBaseURL(
+		"https://esi.example.test",
+		"https://images.example.test/types",
+		&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return jsonResponse(`{
+				"name":"Tritanium",
+				"description":"<p>Refined <b>mineral</b>.</p><p>See <a href=\"showinfo:35\">Pyerite</a>.</p>"
+			}`), nil
+		})},
+	)
+
+	item, err := client.GetItem(context.Background(), model.GetItemQuery{
+		Game: "eve",
+		ID:   "34",
+	})
+	if err != nil {
+		t.Fatalf("GetItem: %v", err)
+	}
+
+	want := "Refined mineral.\n\nSee Pyerite."
+	if item.Description != want {
+		t.Fatalf("description = %q, want %q", item.Description, want)
+	}
+}
+
 func TestEVEClientGetPricing_MapsMarketPrices(t *testing.T) {
 	t.Parallel()
 

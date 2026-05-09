@@ -38,14 +38,17 @@ func TestTarkovSourceStream_ParsesItemsAndLocalizedTranslation(t *testing.T) {
 									"name": "AK test item",
 									"description": "Base description",
 									"iconLink": "https://assets.tarkov.dev/item-1-icon.webp",
-									"image512pxLink": "https://assets.tarkov.dev/item-1-512.webp"
+									"image512pxLink": "https://assets.tarkov.dev/item-1-512.webp",
+									"avg24hPrice": 12500,
+									"basePrice": 9000
 								},
 								{
 									"id": "item-2",
 									"name": "Second item",
 									"description": "",
 									"iconLink": "https://assets.tarkov.dev/item-2-icon.webp",
-									"image512pxLink": ""
+									"image512pxLink": "",
+									"basePrice": 250
 								}
 							]
 						}
@@ -63,14 +66,17 @@ func TestTarkovSourceStream_ParsesItemsAndLocalizedTranslation(t *testing.T) {
 									"name": "АК тестовый предмет",
 									"description": "Русское описание",
 									"iconLink": "https://assets.tarkov.dev/item-1-icon.webp",
-									"image512pxLink": "https://assets.tarkov.dev/item-1-512.webp"
+									"image512pxLink": "https://assets.tarkov.dev/item-1-512.webp",
+									"avg24hPrice": 12500,
+									"basePrice": 9000
 								},
 								{
 									"id": "item-2",
 									"name": "Второй предмет",
 									"description": "",
 									"iconLink": "https://assets.tarkov.dev/item-2-icon.webp",
-									"image512pxLink": ""
+									"image512pxLink": "",
+									"basePrice": 250
 								}
 							]
 						}
@@ -138,5 +144,63 @@ func TestTarkovSourceStream_ParsesItemsAndLocalizedTranslation(t *testing.T) {
 	}
 	if len(second.Translations) != 1 || second.Translations[0].Name != "Второй предмет" {
 		t.Fatalf("second translation = %#v", second.Translations)
+	}
+}
+
+func TestTarkovSourceStream_SkipsItemsWithoutPrice(t *testing.T) {
+	t.Parallel()
+
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			body, _ := io.ReadAll(req.Body)
+			payload := string(body)
+
+			if !strings.Contains(payload, "avg24hPrice") {
+				t.Fatalf("graphql query missing price fields: %s", payload)
+			}
+
+			switch {
+			case strings.Contains(payload, "offset: 0"):
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     make(http.Header),
+					Body: io.NopCloser(strings.NewReader(`{
+						"data": {
+							"items": [
+								{"id": "priced", "name": "Has prices", "description": "", "iconLink": "", "image512pxLink": "", "avg24hPrice": 100, "basePrice": 50},
+								{"id": "no-price", "name": "Quest item", "description": "", "iconLink": "", "image512pxLink": ""},
+								{"id": "zero-price", "name": "Zero", "description": "", "iconLink": "", "image512pxLink": "", "avg24hPrice": 0, "basePrice": 0}
+							]
+						}
+					}`)),
+				}, nil
+			case strings.Contains(payload, "offset: 3"):
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader(`{"data":{"items":[]}}`)),
+				}, nil
+			}
+			t.Fatalf("unexpected request body: %s", payload)
+			return nil, nil
+		}),
+	}
+
+	src := NewTarkovSource(client, "en", 0)
+	src.baseURL = "https://example.test/graphql"
+
+	var items []RawItem
+	if err := src.Stream(context.Background(), func(item RawItem) error {
+		items = append(items, item)
+		return nil
+	}); err != nil {
+		t.Fatalf("stream items: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items len = %d, want 1", len(items))
+	}
+	if items[0].ExternalID != "priced" {
+		t.Fatalf("item = %#v", items[0])
 	}
 }

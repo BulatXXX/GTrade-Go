@@ -63,7 +63,7 @@ func (c *EVEClient) GetItem(ctx context.Context, query model.GetItemQuery) (*mod
 		Game:        "eve",
 		Source:      "esi",
 		Name:        resp.Name,
-		Description: resp.Description,
+		Description: stripHTML(resp.Description),
 		ImageURL:    fmt.Sprintf("%s/%s/icon?size=128", c.imageBaseURL, query.ID),
 		URL:         "",
 		Currency:    "ISK",

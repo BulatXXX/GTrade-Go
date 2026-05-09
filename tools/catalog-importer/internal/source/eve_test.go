@@ -21,8 +21,8 @@ func TestEVESourceStream_ParsesPublishedTypesAndLocalizedTranslation(t *testing.
 					StatusCode: http.StatusOK,
 					Header:     make(http.Header),
 					Body: io.NopCloser(strings.NewReader(`[
-						{"type_id":34},
-						{"type_id":35}
+						{"type_id":34,"average_price":3.9,"adjusted_price":3.06},
+						{"type_id":35,"average_price":4.1,"adjusted_price":4.0}
 					]`)),
 				}, nil
 			case "/universe/types/34/":
@@ -109,6 +109,64 @@ func TestEVESourceStream_ParsesPublishedTypesAndLocalizedTranslation(t *testing.
 	}
 	if item.Translations[0].Name != "Тританий" || item.Translations[0].Description != "Русское описание" {
 		t.Fatalf("translation = %#v", item.Translations[0])
+	}
+}
+
+func TestEVESourceStream_SkipsItemsWithoutPriceAndStripsHTML(t *testing.T) {
+	t.Parallel()
+
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			switch req.URL.Path {
+			case "/markets/prices/":
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     make(http.Header),
+					Body: io.NopCloser(strings.NewReader(`[
+						{"type_id":34,"average_price":3.9,"adjusted_price":3.06},
+						{"type_id":35},
+						{"type_id":36,"average_price":null,"adjusted_price":null}
+					]`)),
+				}, nil
+			case "/universe/types/34/":
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     make(http.Header),
+					Body: io.NopCloser(strings.NewReader(`{
+						"type_id":34,
+						"name":"Tritanium",
+						"description":"<p>Refined <b>mineral</b>.</p><p>See <a href=\"showinfo:35\">Pyerite</a>.</p>",
+						"published":true
+					}`)),
+				}, nil
+			default:
+				t.Fatalf("unexpected path: %s", req.URL.Path)
+			}
+			return nil, nil
+		}),
+	}
+
+	src := NewEVESource(client, "en", 10)
+	src.baseURL = "https://example.test"
+
+	var items []RawItem
+	if err := src.Stream(context.Background(), func(item RawItem) error {
+		items = append(items, item)
+		return nil
+	}); err != nil {
+		t.Fatalf("stream items: %v", err)
+	}
+
+	if len(items) != 1 {
+		t.Fatalf("items len = %d, want 1", len(items))
+	}
+	if items[0].ExternalID != "34" {
+		t.Fatalf("external_id = %q", items[0].ExternalID)
+	}
+	wantDesc := "Refined mineral.\n\nSee Pyerite."
+	if items[0].Description != wantDesc {
+		t.Fatalf("description = %q, want %q", items[0].Description, wantDesc)
 	}
 }
 

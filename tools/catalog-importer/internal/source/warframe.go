@@ -63,6 +63,15 @@ func (s *WarframeSource) Stream(ctx context.Context, consume func(RawItem) error
 			continue
 		}
 
+		hasOrders, err := s.hasSellOrders(ctx, item.Slug)
+		if err != nil {
+			return err
+		}
+		time.Sleep(75 * time.Millisecond)
+		if !hasOrders {
+			continue
+		}
+
 		baseItem, err := s.fetchItemDetail(ctx, item.Slug, "en")
 		if err != nil {
 			return err
@@ -107,6 +116,54 @@ func (s *WarframeSource) Stream(ctx context.Context, consume func(RawItem) error
 	}
 
 	return nil
+}
+
+func (s *WarframeSource) hasSellOrders(ctx context.Context, slug string) (bool, error) {
+	var lastStatus int
+	backoff := 500 * time.Millisecond
+
+	for attempt := 0; attempt < 5; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.baseURL+"/orders/item/"+slug+"/top", nil)
+		if err != nil {
+			return false, fmt.Errorf("build warframe top orders request for %s: %w", slug, err)
+		}
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := s.client.Do(req)
+		if err != nil {
+			return false, fmt.Errorf("request warframe top orders %s: %w", slug, err)
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			lastStatus = resp.StatusCode
+			retryDelay := retryAfterDelay(resp.Header.Get("Retry-After"), backoff)
+			resp.Body.Close()
+			time.Sleep(retryDelay)
+			backoff *= 2
+			continue
+		}
+
+		if resp.StatusCode == http.StatusNotFound {
+			resp.Body.Close()
+			return false, nil
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return false, fmt.Errorf("warframe top orders request failed for %s: status=%d", slug, resp.StatusCode)
+		}
+
+		var payload warframeTopOrdersResponse
+		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+			resp.Body.Close()
+			return false, fmt.Errorf("decode warframe top orders response for %s: %w", slug, err)
+		}
+		resp.Body.Close()
+
+		return len(payload.Data.Sell) > 0, nil
+	}
+
+	return false, fmt.Errorf("warframe top orders request failed for %s: status=%d after retries", slug, lastStatus)
 }
 
 func (s *WarframeSource) fetchItemDetail(ctx context.Context, slug, language string) (*warframeItem, error) {
@@ -170,6 +227,19 @@ func fallbackString(values ...string) string {
 
 type warframeItemsResponse struct {
 	Data []warframeItem `json:"data"`
+}
+
+type warframeTopOrdersResponse struct {
+	Data warframeTopOrdersData `json:"data"`
+}
+
+type warframeTopOrdersData struct {
+	Sell []warframeTopOrder `json:"sell"`
+	Buy  []warframeTopOrder `json:"buy"`
+}
+
+type warframeTopOrder struct {
+	Platinum int `json:"platinum"`
 }
 
 type warframeItemResponse struct {

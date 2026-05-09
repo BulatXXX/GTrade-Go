@@ -69,6 +69,10 @@ func (s *TarkovSource) Stream(ctx context.Context, consume func(RawItem) error) 
 		}
 
 		for _, item := range baseItems {
+			if !tarkovHasPrice(item) {
+				continue
+			}
+
 			raw := RawItem{
 				Game:        "tarkov",
 				Source:      "tarkov-dev",
@@ -134,7 +138,7 @@ func (s *TarkovSource) TotalHint(ctx context.Context) (int, error) {
 }
 
 func (s *TarkovSource) fetchItems(ctx context.Context, language string, offset, limit int) ([]tarkovItem, error) {
-	query := fmt.Sprintf(`{ items(lang: %s, gameMode: regular, offset: %d, limit: %d) { id name description iconLink image512pxLink } }`, language, offset, limit)
+	query := fmt.Sprintf(`{ items(lang: %s, gameMode: regular, offset: %d, limit: %d) { id name description iconLink image512pxLink avg24hPrice low24hPrice high24hPrice basePrice lastLowPrice } }`, language, offset, limit)
 	body, err := json.Marshal(map[string]string{"query": query})
 	if err != nil {
 		return nil, fmt.Errorf("marshal tarkov graphql query: %w", err)
@@ -200,4 +204,19 @@ type tarkovItem struct {
 	Description    string `json:"description"`
 	IconLink       string `json:"iconLink"`
 	Image512pxLink string `json:"image512pxLink"`
+	Avg24hPrice    *int   `json:"avg24hPrice"`
+	Low24hPrice    *int   `json:"low24hPrice"`
+	High24hPrice   *int   `json:"high24hPrice"`
+	BasePrice      *int   `json:"basePrice"`
+	LastLowPrice   *int   `json:"lastLowPrice"`
+}
+
+func tarkovHasPrice(item tarkovItem) bool {
+	prices := []*int{item.Avg24hPrice, item.Low24hPrice, item.High24hPrice, item.BasePrice, item.LastLowPrice}
+	for _, p := range prices {
+		if p != nil && *p > 0 {
+			return true
+		}
+	}
+	return false
 }
