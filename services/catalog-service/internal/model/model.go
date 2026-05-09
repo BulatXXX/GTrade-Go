@@ -99,6 +99,37 @@ type ListItemsResponse struct {
 	Offset int    `json:"offset"`
 }
 
+type PriceHistoryEntry struct {
+	ItemID      string    `json:"item_id"`
+	Source      string    `json:"source"`
+	GameMode    string    `json:"game_mode,omitempty"`
+	Value       float64   `json:"value"`
+	Currency    string    `json:"currency"`
+	CollectedOn string    `json:"collected_on"`
+	CollectedAt time.Time `json:"collected_at"`
+}
+
+type PriceHistoryFilter struct {
+	GameMode string
+	Limit    int
+}
+
+type UpsertPriceHistoryInput struct {
+	ItemID      string
+	Source      string
+	GameMode    string
+	Value       float64
+	Currency    string
+	CollectedOn time.Time
+	CollectedAt time.Time
+}
+
+type PriceHistoryResponse struct {
+	ItemID   string              `json:"item_id"`
+	GameMode string              `json:"game_mode,omitempty"`
+	History  []PriceHistoryEntry `json:"history"`
+}
+
 type DeleteItemResponse struct {
 	Status string `json:"status"`
 }

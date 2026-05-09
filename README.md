@@ -209,6 +209,7 @@ make auth-notification-e2e-test
 - `api-gateway -> domain services`
 - runtime pricing и metadata fetch для `warframe`, `eve`, `tarkov`
 - локальный каталог с search и локализациями
+- daily historical pricing в `catalog-service` с фоновым collector'ом и `GET /items/:id/prices/history`
 - smoke, unit, integration и частично live e2e тесты по основным контурам
 
 ## Что еще не закрыто
@@ -216,7 +217,7 @@ make auth-notification-e2e-test
 - полный rollout internal auth для всех внутренних чувствительных route'ов
 - scheduler/runner для регулярного sync
 - backup flow перед full catalog sync
-- historical pricing storage для аналитики и дашбордов
+- analytics и product-слой поверх уже собранной historical pricing history
 - frontend живет отдельно и не входит в этот репозиторий
 
 ## Порты

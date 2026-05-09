@@ -31,6 +31,23 @@ CREATE TABLE IF NOT EXISTS prices (
     collected_at TIMESTAMPTZ NOT NULL
 );
 
+ALTER TABLE prices
+    ADD COLUMN IF NOT EXISTS game_mode TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE prices
+    ADD COLUMN IF NOT EXISTS collected_on DATE;
+
+UPDATE prices
+SET collected_on = (collected_at AT TIME ZONE 'UTC')::DATE
+WHERE collected_on IS NULL;
+
+ALTER TABLE prices
+    ALTER COLUMN collected_on SET DEFAULT CURRENT_DATE;
+
+ALTER TABLE prices
+    ALTER COLUMN collected_on SET NOT NULL;
+
 CREATE INDEX IF NOT EXISTS idx_prices_item_collected ON prices(item_id, collected_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_prices_item_source_mode_day ON prices(item_id, source, game_mode, collected_on);
 CREATE INDEX IF NOT EXISTS idx_items_game_source_name ON items(game, source, name);
 CREATE INDEX IF NOT EXISTS idx_item_translations_item_id ON item_translations(item_id);

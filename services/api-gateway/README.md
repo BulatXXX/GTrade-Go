@@ -22,6 +22,11 @@
 - `/api/market/*` -> `api-integration-service`
 - `/api/notifications/*` -> `notification-service`
 
+Пример catalog history через gateway:
+
+- `GET /api/items/:id/prices/history?limit=30`
+- `GET /api/items/:id/prices/history?game_mode=pve&limit=30`
+
 Это сделано намеренно:
 
 - `catalog-service` остается фасадом для локального каталога и поиска

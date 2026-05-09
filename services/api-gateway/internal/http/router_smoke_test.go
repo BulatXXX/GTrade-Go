@@ -32,8 +32,17 @@ func TestRouterSmoke_ProxiesPublicRoutes(t *testing.T) {
 				}
 				return &service.ForwardResponse{StatusCode: http.StatusOK, Body: []byte(`{"service":"auth"}`)}, nil
 			case service.TargetCatalog:
-				if req.Path != "/items/search" || req.RawQuery != "q=frost&game=warframe" {
-					t.Fatalf("catalog path/query = %q?%s", req.Path, req.RawQuery)
+				switch req.Path {
+				case "/items/search":
+					if req.RawQuery != "q=frost&game=warframe" {
+						t.Fatalf("catalog path/query = %q?%s", req.Path, req.RawQuery)
+					}
+				case "/items/item_1/prices/history":
+					if req.RawQuery != "game_mode=pve&limit=30" {
+						t.Fatalf("catalog history path/query = %q?%s", req.Path, req.RawQuery)
+					}
+				default:
+					t.Fatalf("unexpected catalog path/query = %q?%s", req.Path, req.RawQuery)
 				}
 				return &service.ForwardResponse{StatusCode: http.StatusOK, Body: []byte(`{"service":"catalog"}`)}, nil
 			case service.TargetIntegration:
@@ -55,6 +64,7 @@ func TestRouterSmoke_ProxiesPublicRoutes(t *testing.T) {
 	}{
 		{name: "auth", path: "/api/auth/login", want: `{"service":"auth"}`},
 		{name: "catalog", path: "/api/items/search?q=frost&game=warframe", want: `{"service":"catalog"}`},
+		{name: "catalog history", path: "/api/items/item_1/prices/history?game_mode=pve&limit=30", want: `{"service":"catalog"}`},
 		{name: "market", path: "/api/market/items/frost_prime_set/prices?game=warframe", want: `{"service":"integration"}`},
 	}
 

@@ -7,12 +7,14 @@ import (
 )
 
 type Config struct {
-	ServiceName  string
-	Port         int
-	DatabaseURL  string
-	JWTSecret    string
-	LogLevel     string
-	ResendAPIKey string
+	ServiceName                 string
+	Port                        int
+	DatabaseURL                 string
+	JWTSecret                   string
+	LogLevel                    string
+	ResendAPIKey                string
+	IntegrationServiceURL       string
+	PriceHistoryRefreshInterval string
 }
 
 func Load() (Config, error) {
@@ -22,12 +24,14 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		ServiceName:  getEnv("SERVICE_NAME", "service"),
-		Port:         port,
-		DatabaseURL:  os.Getenv("DATABASE_URL"),
-		JWTSecret:    getEnv("JWT_SECRET", "change-me"),
-		LogLevel:     getEnv("LOG_LEVEL", "info"),
-		ResendAPIKey: getEnv("RESEND_API_KEY", ""),
+		ServiceName:                 getEnv("SERVICE_NAME", "service"),
+		Port:                        port,
+		DatabaseURL:                 os.Getenv("DATABASE_URL"),
+		JWTSecret:                   getEnv("JWT_SECRET", "change-me"),
+		LogLevel:                    getEnv("LOG_LEVEL", "info"),
+		ResendAPIKey:                getEnv("RESEND_API_KEY", ""),
+		IntegrationServiceURL:       getEnv("INTEGRATION_SERVICE_URL", "http://localhost:8083"),
+		PriceHistoryRefreshInterval: getEnv("PRICE_HISTORY_REFRESH_INTERVAL", "24h"),
 	}
 
 	return cfg, nil
