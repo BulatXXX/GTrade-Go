@@ -128,6 +128,12 @@ paths:
             type: string
           description: Optional translation language code, for example ru or en
         - in: query
+          name: active_only
+          schema:
+            type: boolean
+            default: true
+          description: Return only active items
+        - in: query
           name: limit
           schema:
             type: integer
@@ -215,6 +221,10 @@ paths:
   /items/{id}/prices/history:
     get:
       summary: Get historical daily prices for an item
+      description: |
+        Returns daily top-price history already stored in `catalog-service`.
+        One row represents one day for a given `item_id + source + game_mode`.
+        Repeated collection on the same day updates the existing row.
       tags: [pricing]
       parameters:
         - in: path
@@ -242,6 +252,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PriceHistoryResponse'
+              examples:
+                default:
+                  summary: Warframe daily history
+                  value:
+                    item_id: item_01HZY3Y8VYB1T2Q9R5R9K7N1AA
+                    history:
+                      - item_id: item_01HZY3Y8VYB1T2Q9R5R9K7N1AA
+                        source: warframe-market
+                        value: 125
+                        currency: PLAT
+                        collected_on: 2026-05-09
+                        collected_at: 2026-05-09T09:00:00Z
+                tarkovPve:
+                  summary: Tarkov pve history
+                  value:
+                    item_id: item_01HZY3Y8VYB1T2Q9R5R9K7N1AA
+                    game_mode: pve
+                    history:
+                      - item_id: item_01HZY3Y8VYB1T2Q9R5R9K7N1AA
+                        source: tarkov.dev
+                        game_mode: pve
+                        value: 14161
+                        currency: RUB
+                        collected_on: 2026-05-09
+                        collected_at: 2026-05-09T10:15:00Z
         '400':
           description: Invalid request params
           content:
@@ -495,7 +530,7 @@ components:
           example: item_01HZY3Y8VYB1T2Q9R5R9K7N1AA
         source:
           type: string
-          example: tarkov-dev
+          example: tarkov.dev
         game_mode:
           type: string
           example: regular

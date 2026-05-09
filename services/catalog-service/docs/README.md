@@ -181,6 +181,50 @@ curl -sS 'http://localhost:8084/items/<ITEM_ID>/prices/history?limit=30'
 curl -sS 'http://localhost:8084/items/<ITEM_ID>/prices/history?game_mode=pve&limit=30'
 ```
 
+Через `api-gateway` это выглядит так же, только с публичным префиксом `/api/items`:
+
+```bash
+curl -sS 'http://localhost:8080/api/items/<ITEM_ID>/prices/history?limit=30'
+```
+
+```bash
+curl -sS 'http://localhost:8080/api/items/<ITEM_ID>/prices/history?game_mode=pve&limit=30'
+```
+
+Как читать этот endpoint:
+
+- `id` — локальный `catalog item id`, а не внешний marketplace id
+- `limit` — сколько последних дневных записей вернуть, по умолчанию `30`
+- `game_mode` — нужен в первую очередь для `tarkov`, допустимые рабочие значения сейчас `regular` и `pve`
+- без `game_mode` сервис вернет общую историю по item для всех сохраненных режимов
+
+Форма ответа:
+
+```json
+{
+  "item_id": "item_01HZY3Y8VYB1T2Q9R5R9K7N1AA",
+  "game_mode": "pve",
+  "history": [
+    {
+      "item_id": "item_01HZY3Y8VYB1T2Q9R5R9K7N1AA",
+      "source": "tarkov.dev",
+      "game_mode": "pve",
+      "value": 14161,
+      "currency": "RUB",
+      "collected_on": "2026-05-09",
+      "collected_at": "2026-05-09T10:15:00Z"
+    }
+  ]
+}
+```
+
+Семантика данных:
+
+- это не сырой market snapshot, а daily top-price history
+- для одной комбинации `item_id + source + game_mode + day` хранится одна запись
+- если collector сходил повторно в тот же день, запись обновится, а не продублируется
+- для игр без режимов поле `game_mode` обычно пустое
+
 Текущий подтвержденный поток наполнения каталога такой:
 
 - внешний источник отдает список предметов
@@ -205,6 +249,19 @@ curl -sS 'http://localhost:8084/items/<ITEM_ID>/prices/history?game_mode=pve&lim
 
 - `INTEGRATION_SERVICE_URL` — базовый URL `api-integration-service`, по умолчанию `http://localhost:8083`
 - `PRICE_HISTORY_REFRESH_INTERVAL` — период фонового обновления, по умолчанию `24h`
+
+Практический сценарий использования:
+
+1. наполнить каталог через importer или internal sync
+2. дождаться прохода collector'а или перезапустить сервис с коротким `PRICE_HISTORY_REFRESH_INTERVAL`
+3. взять локальный `item_id` из `GET /items` или `GET /items/search`
+4. читать историю через `GET /items/:id/prices/history`
+
+Если endpoint возвращает пустой `history`, это обычно означает одно из трех:
+
+- collector еще не успел пройти по предмету
+- внешний provider не отдал `top-price`
+- предмет есть в каталоге, но для него пока не было успешной записи в `prices`
 
 Документация по реальному импорту лежит в:
 

@@ -177,6 +177,18 @@ curl -sS "$GATEWAY_URL/api/items/$CATALOG_ITEM_ID?language=ru"
 - `CATALOG_ITEM_ID` не пустой
 - `GET /api/items/$CATALOG_ITEM_ID` возвращает локальную карточку
 
+Получить историю цен по локальному catalog item:
+
+```bash
+curl -sS "$GATEWAY_URL/api/items/$CATALOG_ITEM_ID/prices/history?limit=30"
+```
+
+Для Tarkov можно отдельно проверить режим `pve`:
+
+```bash
+curl -sS "$GATEWAY_URL/api/items/$CATALOG_ITEM_ID/prices/history?game_mode=pve&limit=30"
+```
+
 ## Сценарий 4. Runtime market data через gateway
 
 Warframe search:

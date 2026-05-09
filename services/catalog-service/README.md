@@ -37,6 +37,13 @@
 - sync через `api-integration-service` обновляет базовую metadata и не должен сносить существующие переводы, если новые `translations` не переданы
 - history цен обновляется фоновым collector'ом внутри сервиса через `api-integration-service`
 
+## Как пользоваться history prices
+
+- сначала получить локальный `catalog item id` через `GET /items` или `GET /items/search`
+- затем запросить историю: `GET /items/:id/prices/history?limit=30`
+- для `tarkov` можно уточнить режим: `GET /items/:id/prices/history?game_mode=pve&limit=30`
+- через gateway используется тот же путь с префиксом `/api/items/...`
+
 ## Следующий логичный шаг
 
 - hardening backup flow перед full sync

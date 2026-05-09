@@ -73,18 +73,18 @@
 
 - full sync без rollback story опасен для локального source of truth
 
-### 4. Pricing history и analytics storage
+### 4. Analytics поверх pricing history
 
 Что нужно:
 
-- решить, где хранить historical pricing snapshots
+- расширить уже существующую `prices` history до нужд аналитики и дашбордов
 - определить минимальный набор аналитических метрик
-- не смешивать history storage с metadata catalog без явной причины
+- решить, достаточно ли текущего daily history storage или нужен отдельный слой
 
 Почему это важно:
 
-- runtime pricing уже есть
-- для дашбордов не хватает истории
+- daily history уже собирается
+- для дашбордов и пользовательской аналитики не хватает производного слоя
 
 ### 5. Gateway hardening
 

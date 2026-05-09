@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gtrade/services/catalog-service/internal/model"
@@ -146,8 +147,10 @@ func (h *Handler) GetPriceHistory(c *gin.Context) {
 		return
 	}
 
+	gameMode := strings.TrimSpace(c.Query("game_mode"))
+
 	history, err := h.catalogService.GetPriceHistory(c.Request.Context(), c.Param("id"), model.PriceHistoryFilter{
-		GameMode: c.Query("game_mode"),
+		GameMode: gameMode,
 		Limit:    limit,
 	})
 	if err != nil {
@@ -164,7 +167,7 @@ func (h *Handler) GetPriceHistory(c *gin.Context) {
 
 	c.JSON(http.StatusOK, model.PriceHistoryResponse{
 		ItemID:   c.Param("id"),
-		GameMode: c.Query("game_mode"),
+		GameMode: gameMode,
 		History:  history,
 	})
 }
