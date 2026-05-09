@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"gtrade/services/user-asset-service/internal/client/catalog"
 	"gtrade/services/user-asset-service/internal/repository"
@@ -25,10 +26,11 @@ type userAssetRepository interface {
 	UpdateUser(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*repository.UserProfile, error)
 	ListWatchlist(ctx context.Context, userID int64) ([]repository.WatchlistItem, error)
 	AddWatchlistItem(ctx context.Context, userID int64, itemID string) (*repository.WatchlistItem, error)
+	UpdateWatchlistItemNotification(ctx context.Context, userID, watchlistID int64, notifyEnabled bool) (*repository.WatchlistItem, error)
 	DeleteWatchlistItem(ctx context.Context, userID, watchlistID int64) (bool, error)
 	ListRecent(ctx context.Context, userID int64, limit int) ([]repository.WatchlistItem, error)
 	GetPreferences(ctx context.Context, userID int64) (*repository.UserPreferences, error)
-	UpsertPreferences(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error)
+	UpsertPreferences(ctx context.Context, userID int64, currency string, notificationsEnabled bool, notificationMode, notificationTime string) (*repository.UserPreferences, error)
 }
 
 func NewUserAssetService(repo userAssetRepository, catalog catalogClient) *UserAssetService {
@@ -93,19 +95,42 @@ func (s *UserAssetService) GetPreferences(ctx context.Context, userID int64) (*r
 		return nil, err
 	}
 	if prefs == nil {
-		return s.repo.UpsertPreferences(ctx, userID, "credits", true)
+		return s.repo.UpsertPreferences(ctx, userID, "credits", true, "daily_digest", "09:00")
 	}
 	return prefs, nil
 }
 
-func (s *UserAssetService) UpdatePreferences(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error) {
+func (s *UserAssetService) UpdatePreferences(ctx context.Context, userID int64, currency string, notificationsEnabled bool, notificationMode, notificationTime string) (*repository.UserPreferences, error) {
 	if userID <= 0 {
 		return nil, fmt.Errorf("user_id is required")
 	}
 	if currency == "" {
 		currency = "credits"
 	}
-	return s.repo.UpsertPreferences(ctx, userID, currency, notificationsEnabled)
+	notificationMode = strings.TrimSpace(notificationMode)
+	if notificationMode == "" {
+		notificationMode = "daily_digest"
+	}
+	if notificationMode != "daily_digest" && notificationMode != "immediate" {
+		return nil, fmt.Errorf("notification_mode must be daily_digest or immediate")
+	}
+
+	notificationTime = strings.TrimSpace(notificationTime)
+	if notificationTime == "" {
+		notificationTime = "09:00"
+	}
+	if _, err := time.Parse("15:04", notificationTime); err != nil {
+		return nil, fmt.Errorf("notification_time must use HH:MM format")
+	}
+
+	return s.repo.UpsertPreferences(ctx, userID, currency, notificationsEnabled, notificationMode, notificationTime)
+}
+
+func (s *UserAssetService) UpdateWatchlistNotification(ctx context.Context, userID, watchlistID int64, notifyEnabled bool) (*repository.WatchlistItem, error) {
+	if userID <= 0 || watchlistID <= 0 {
+		return nil, fmt.Errorf("user_id and watchlist id are required")
+	}
+	return s.repo.UpdateWatchlistItemNotification(ctx, userID, watchlistID, notifyEnabled)
 }
 
 func (s *UserAssetService) GetCatalogItem(ctx context.Context, itemID string) (*catalog.Item, error) {

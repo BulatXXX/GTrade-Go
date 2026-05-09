@@ -18,10 +18,17 @@ type AddWatchlistRequest struct {
 	ItemID string `json:"item_id"`
 }
 
+type UpdateWatchlistNotificationsRequest struct {
+	UserID        int64 `json:"user_id"`
+	NotifyEnabled bool  `json:"notify_enabled"`
+}
+
 type UpdatePreferencesRequest struct {
 	UserID               int64  `json:"user_id"`
 	Currency             string `json:"currency"`
 	NotificationsEnabled bool   `json:"notifications_enabled"`
+	NotificationMode     string `json:"notification_mode"`
+	NotificationTime     string `json:"notification_time"`
 }
 
 type UserProfileResponse struct {
@@ -43,16 +50,19 @@ type CatalogItemSummary struct {
 }
 
 type WatchlistItemResponse struct {
-	ID        int64               `json:"id"`
-	UserID    int64               `json:"user_id"`
-	ItemID    string              `json:"item_id"`
-	Item      *CatalogItemSummary `json:"item,omitempty"`
-	CreatedAt string              `json:"created_at"`
+	ID            int64               `json:"id"`
+	UserID        int64               `json:"user_id"`
+	ItemID        string              `json:"item_id"`
+	NotifyEnabled bool                `json:"notify_enabled"`
+	Item          *CatalogItemSummary `json:"item,omitempty"`
+	CreatedAt     string              `json:"created_at"`
 }
 
 type PreferencesResponse struct {
 	UserID               int64  `json:"user_id"`
 	Currency             string `json:"currency"`
 	NotificationsEnabled bool   `json:"notifications_enabled"`
+	NotificationMode     string `json:"notification_mode"`
+	NotificationTime     string `json:"notification_time"`
 	UpdatedAt            string `json:"updated_at"`
 }

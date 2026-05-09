@@ -12,6 +12,7 @@ func registerServiceRoutes(r *gin.Engine, h *handler.Handler) {
 
 	r.GET("/watchlist", h.GetWatchlist)
 	r.POST("/watchlist", h.CreateWatchlist)
+	r.PUT("/watchlist/:id/notifications", h.UpdateWatchlistNotifications)
 	r.DELETE("/watchlist/:id", h.DeleteWatchlist)
 
 	r.GET("/recent", h.GetRecent)

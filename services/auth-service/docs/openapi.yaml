@@ -231,6 +231,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /internal/users/{id}/email:
+    get:
+      summary: Get user email for internal service-to-service flows
+      tags: [internal]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: User contact found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalUserEmailResponse'
+        '400':
+          description: Invalid user id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid internal token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: User contact lookup failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   schemas:
     HealthResponse:
@@ -336,6 +378,21 @@ components:
         status:
           type: string
           example: verification_requested
+    InternalUserEmailResponse:
+      type: object
+      required: [user_id, email, email_verified]
+      properties:
+        user_id:
+          type: integer
+          format: int64
+          example: 1
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        email_verified:
+          type: boolean
+          example: true
     ErrorResponse:
       type: object
       required: [error]

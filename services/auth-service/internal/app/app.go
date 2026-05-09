@@ -36,7 +36,7 @@ func Run(ctx context.Context) error {
 	notifier := service.NewNotificationClient(cfg.NotificationServiceURL)
 	authService := service.NewAuthService(authRepo, cfg.JWTSecret, notifier)
 	h := handler.New(cfg.ServiceName, authService)
-	r := httpserver.NewRouter(logger, h)
+	r := httpserver.NewRouterWithInternalToken(logger, h, cfg.InternalAPIToken)
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),

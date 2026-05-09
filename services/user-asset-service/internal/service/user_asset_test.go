@@ -11,15 +11,16 @@ import (
 )
 
 type stubRepo struct {
-	createUserFn          func(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*repository.UserProfile, error)
-	getUserFn             func(ctx context.Context, userID int64) (*repository.UserProfile, error)
-	updateUserFn          func(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*repository.UserProfile, error)
-	listWatchlistFn       func(ctx context.Context, userID int64) ([]repository.WatchlistItem, error)
-	addWatchlistItemFn    func(ctx context.Context, userID int64, itemID string) (*repository.WatchlistItem, error)
-	deleteWatchlistItemFn func(ctx context.Context, userID, watchlistID int64) (bool, error)
-	listRecentFn          func(ctx context.Context, userID int64, limit int) ([]repository.WatchlistItem, error)
-	getPreferencesFn      func(ctx context.Context, userID int64) (*repository.UserPreferences, error)
-	upsertPreferencesFn   func(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error)
+	createUserFn                  func(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*repository.UserProfile, error)
+	getUserFn                     func(ctx context.Context, userID int64) (*repository.UserProfile, error)
+	updateUserFn                  func(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*repository.UserProfile, error)
+	listWatchlistFn               func(ctx context.Context, userID int64) ([]repository.WatchlistItem, error)
+	addWatchlistItemFn            func(ctx context.Context, userID int64, itemID string) (*repository.WatchlistItem, error)
+	updateWatchlistNotificationFn func(ctx context.Context, userID, watchlistID int64, notifyEnabled bool) (*repository.WatchlistItem, error)
+	deleteWatchlistItemFn         func(ctx context.Context, userID, watchlistID int64) (bool, error)
+	listRecentFn                  func(ctx context.Context, userID int64, limit int) ([]repository.WatchlistItem, error)
+	getPreferencesFn              func(ctx context.Context, userID int64) (*repository.UserPreferences, error)
+	upsertPreferencesFn           func(ctx context.Context, userID int64, currency string, notificationsEnabled bool, notificationMode, notificationTime string) (*repository.UserPreferences, error)
 }
 
 func (s stubRepo) CreateUser(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*repository.UserProfile, error) {
@@ -37,6 +38,9 @@ func (s stubRepo) ListWatchlist(ctx context.Context, userID int64) ([]repository
 func (s stubRepo) AddWatchlistItem(ctx context.Context, userID int64, itemID string) (*repository.WatchlistItem, error) {
 	return s.addWatchlistItemFn(ctx, userID, itemID)
 }
+func (s stubRepo) UpdateWatchlistItemNotification(ctx context.Context, userID, watchlistID int64, notifyEnabled bool) (*repository.WatchlistItem, error) {
+	return s.updateWatchlistNotificationFn(ctx, userID, watchlistID, notifyEnabled)
+}
 func (s stubRepo) DeleteWatchlistItem(ctx context.Context, userID, watchlistID int64) (bool, error) {
 	return s.deleteWatchlistItemFn(ctx, userID, watchlistID)
 }
@@ -46,8 +50,8 @@ func (s stubRepo) ListRecent(ctx context.Context, userID int64, limit int) ([]re
 func (s stubRepo) GetPreferences(ctx context.Context, userID int64) (*repository.UserPreferences, error) {
 	return s.getPreferencesFn(ctx, userID)
 }
-func (s stubRepo) UpsertPreferences(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error) {
-	return s.upsertPreferencesFn(ctx, userID, currency, notificationsEnabled)
+func (s stubRepo) UpsertPreferences(ctx context.Context, userID int64, currency string, notificationsEnabled bool, notificationMode, notificationTime string) (*repository.UserPreferences, error) {
+	return s.upsertPreferencesFn(ctx, userID, currency, notificationsEnabled, notificationMode, notificationTime)
 }
 
 type stubCatalog struct {
@@ -107,8 +111,15 @@ func TestGetPreferences_CreatesDefaultPreferences(t *testing.T) {
 		getPreferencesFn: func(ctx context.Context, userID int64) (*repository.UserPreferences, error) {
 			return nil, nil
 		},
-		upsertPreferencesFn: func(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error) {
-			return &repository.UserPreferences{UserID: userID, Currency: currency, NotificationsEnabled: notificationsEnabled, UpdatedAt: time.Now()}, nil
+		upsertPreferencesFn: func(ctx context.Context, userID int64, currency string, notificationsEnabled bool, notificationMode, notificationTime string) (*repository.UserPreferences, error) {
+			return &repository.UserPreferences{
+				UserID:               userID,
+				Currency:             currency,
+				NotificationsEnabled: notificationsEnabled,
+				NotificationMode:     notificationMode,
+				NotificationTime:     notificationTime,
+				UpdatedAt:            time.Now(),
+			}, nil
 		},
 	}, stubCatalog{getItemFn: func(ctx context.Context, id string) (*catalog.Item, error) { return nil, nil }})
 
@@ -116,7 +127,7 @@ func TestGetPreferences_CreatesDefaultPreferences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPreferences: %v", err)
 	}
-	if prefs.Currency != "credits" || !prefs.NotificationsEnabled {
+	if prefs.Currency != "credits" || !prefs.NotificationsEnabled || prefs.NotificationMode != "daily_digest" || prefs.NotificationTime != "09:00" {
 		t.Fatalf("prefs = %#v", prefs)
 	}
 }
@@ -183,5 +194,18 @@ func TestAddWatchlistItem_FailsWhenCatalogItemMissing(t *testing.T) {
 	_, err := svc.AddWatchlistItem(context.Background(), 42, "missing-item")
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestUpdatePreferences_ValidatesNotificationFields(t *testing.T) {
+	t.Parallel()
+
+	svc := NewUserAssetService(stubRepo{}, stubCatalog{getItemFn: func(ctx context.Context, id string) (*catalog.Item, error) { return nil, nil }})
+
+	if _, err := svc.UpdatePreferences(context.Background(), 1, "credits", true, "weekly", "09:00"); err == nil {
+		t.Fatal("expected notification mode validation error")
+	}
+	if _, err := svc.UpdatePreferences(context.Background(), 1, "credits", true, "daily_digest", "bad"); err == nil {
+		t.Fatal("expected notification time validation error")
 	}
 }

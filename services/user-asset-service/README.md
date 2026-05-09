@@ -33,6 +33,7 @@
   - `bio`
 - watchlist пользователя в облаке
 - пользовательские preferences
+- состояние price alert dispatch для watchlist
 
 ## Важные особенности
 
@@ -41,13 +42,17 @@
 - при добавлении в watchlist сервис проверяет, что item существует и активен в `catalog-service`
 - ответы watchlist/user/recent обогащаются item summary из `catalog-service`, если каталог доступен
 - `GET /users/:id` возвращает профиль и текущий watchlist одним ответом
-- preferences пока минимальные: `currency`, `notifications_enabled`
+- у каждого watchlist item есть `notify_enabled`
+- preferences поддерживают `notification_mode=daily_digest|immediate`
+- preferences поддерживают `notification_time` в формате `HH:MM` UTC
+- price alert письма уходят через `notification-service` как HTML digest/update
 
 ## Следующий логичный шаг
 
 - решить, нужны ли отдельные list entity кроме базового watchlist
 - добавить auth-aware flow, чтобы не передавать `user_id` в query/body после подключения gateway/auth
 - добавить OpenAPI-driven client contract в gateway после подключения auth
+- при необходимости вынести price alert scheduler из `user-asset-service` в отдельный worker
 
 ## Тесты
 

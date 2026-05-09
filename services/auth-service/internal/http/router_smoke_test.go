@@ -23,6 +23,7 @@ type stubAuthService struct {
 	confirmPasswordResetFn     func(ctx context.Context, token, newPassword string) error
 	requestEmailVerificationFn func(ctx context.Context, email string) (string, error)
 	verifyEmailFn              func(ctx context.Context, token string) error
+	getUserContactFn           func(ctx context.Context, userID int64) (*service.UserContact, error)
 }
 
 func (s stubAuthService) Register(ctx context.Context, email, password string) (*service.TokenPair, error) {
@@ -51,6 +52,10 @@ func (s stubAuthService) RequestEmailVerification(ctx context.Context, email str
 
 func (s stubAuthService) VerifyEmail(ctx context.Context, token string) error {
 	return s.verifyEmailFn(ctx, token)
+}
+
+func (s stubAuthService) GetUserContact(ctx context.Context, userID int64) (*service.UserContact, error) {
+	return s.getUserContactFn(ctx, userID)
 }
 
 func TestRouterSmoke(t *testing.T) {
@@ -109,6 +114,16 @@ func TestRouterSmoke(t *testing.T) {
 					return service.ErrInvalidToken
 				}
 				return nil
+			},
+			getUserContactFn: func(ctx context.Context, userID int64) (*service.UserContact, error) {
+				if userID == 404 {
+					return nil, service.ErrUserNotFound
+				}
+				return &service.UserContact{
+					UserID:        userID,
+					Email:         "user@example.com",
+					EmailVerified: true,
+				}, nil
 			},
 		}),
 	)
@@ -276,6 +291,39 @@ func TestRouterSmoke(t *testing.T) {
 
 			assertJSONFields(t, rec.Body.Bytes(), tt.wantJSONFields)
 		})
+	}
+}
+
+func TestRouterSmoke_InternalUserEmailRequiresTokenAndReturnsContact(t *testing.T) {
+	t.Parallel()
+
+	router := NewRouterWithInternalToken(
+		zerolog.Nop(),
+		handler.New("auth-service", stubAuthService{
+			getUserContactFn: func(ctx context.Context, userID int64) (*service.UserContact, error) {
+				return &service.UserContact{
+					UserID:        userID,
+					Email:         "user@example.com",
+					EmailVerified: true,
+				}, nil
+			},
+		}),
+		"test-internal-token",
+	)
+
+	unauthorizedReq := httptest.NewRequest(http.MethodGet, "/internal/users/12/email", nil)
+	unauthorizedRec := httptest.NewRecorder()
+	router.ServeHTTP(unauthorizedRec, unauthorizedReq)
+	if unauthorizedRec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d; body=%s", unauthorizedRec.Code, http.StatusUnauthorized, unauthorizedRec.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/internal/users/12/email", nil)
+	req.Header.Set("X-Internal-Token", "test-internal-token")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
 	}
 }
 

@@ -175,6 +175,7 @@ func applyUserAssetMigrations(t *testing.T, ctx context.Context, pool *pgxpool.P
 	migrations := []string{
 		filepath.Join(root, "migrations", "0001_init.sql"),
 		filepath.Join(root, "migrations", "0002_profile_fields_and_watchlist_refs.sql"),
+		filepath.Join(root, "migrations", "0003_watchlist_notifications.sql"),
 	}
 
 	for _, migration := range migrations {

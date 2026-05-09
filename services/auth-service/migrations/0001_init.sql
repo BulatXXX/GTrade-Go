@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email ON users(email);
+
 CREATE TABLE IF NOT EXISTS refresh_tokens (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,

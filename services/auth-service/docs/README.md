@@ -76,6 +76,14 @@ make auth-notification-e2e-test
 http://localhost:8081
 ```
 
+Для внутренних клиентов также есть protected route:
+
+```text
+GET /internal/users/:id/email
+```
+
+Он требует `X-Internal-Token` и используется соседними сервисами для системных уведомлений.
+
 ### 1. Health
 
 ```bash

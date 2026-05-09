@@ -13,6 +13,7 @@ type Config struct {
 	JWTSecret              string
 	LogLevel               string
 	NotificationServiceURL string
+	InternalAPIToken       string
 }
 
 func Load() (Config, error) {
@@ -28,6 +29,7 @@ func Load() (Config, error) {
 		JWTSecret:              getEnv("JWT_SECRET", "change-me"),
 		LogLevel:               getEnv("LOG_LEVEL", "info"),
 		NotificationServiceURL: getEnv("NOTIFICATION_SERVICE_URL", "http://notification-service:8085"),
+		InternalAPIToken:       os.Getenv("INTERNAL_API_TOKEN"),
 	}
 
 	return cfg, nil

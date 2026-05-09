@@ -46,3 +46,9 @@ type PasswordResetRequestResponse struct {
 type EmailVerifyResponse struct {
 	Status string `json:"status"`
 }
+
+type InternalUserEmailResponse struct {
+	UserID        int64  `json:"user_id"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+}

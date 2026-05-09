@@ -196,6 +196,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /watchlist/{id}/notifications:
+    put:
+      summary: Update notifications for one watchlist item
+      tags: [watchlist]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWatchlistNotificationsRequest'
+      responses:
+        '200':
+          description: Watchlist notification flag updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistItem'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Watchlist item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /recent:
     get:
       summary: Get recent watchlist items
@@ -333,6 +369,24 @@ components:
         notifications_enabled:
           type: boolean
           example: true
+        notification_mode:
+          type: string
+          example: daily_digest
+          enum: [daily_digest, immediate]
+        notification_time:
+          type: string
+          example: 09:00
+    UpdateWatchlistNotificationsRequest:
+      type: object
+      required: [user_id, notify_enabled]
+      properties:
+        user_id:
+          type: integer
+          format: int64
+          example: 1
+        notify_enabled:
+          type: boolean
+          example: true
     UserProfileResponse:
       type: object
       required: [user_id, display_name, avatar_url, bio, created_at, updated_at]
@@ -380,7 +434,7 @@ components:
           example: https://cdn.example.com/frost.png
     WatchlistItem:
       type: object
-      required: [id, user_id, item_id, created_at]
+      required: [id, user_id, item_id, notify_enabled, created_at]
       properties:
         id:
           type: integer
@@ -393,6 +447,9 @@ components:
         item_id:
           type: string
           example: item-uuid-1
+        notify_enabled:
+          type: boolean
+          example: true
         item:
           $ref: '#/components/schemas/CatalogItemSummary'
         created_at:
@@ -418,7 +475,7 @@ components:
             $ref: '#/components/schemas/WatchlistItem'
     PreferencesResponse:
       type: object
-      required: [user_id, currency, notifications_enabled, updated_at]
+      required: [user_id, currency, notifications_enabled, notification_mode, notification_time, updated_at]
       properties:
         user_id:
           type: integer
@@ -430,6 +487,12 @@ components:
         notifications_enabled:
           type: boolean
           example: true
+        notification_mode:
+          type: string
+          example: daily_digest
+        notification_time:
+          type: string
+          example: 09:00
         updated_at:
           type: string
           format: date-time

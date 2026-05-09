@@ -145,6 +145,32 @@ func (h *Handler) DeleteWatchlist(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func (h *Handler) UpdateWatchlistNotifications(c *gin.Context) {
+	watchlistID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || watchlistID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid watchlist id"})
+		return
+	}
+
+	var req model.UpdateWatchlistNotificationsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	item, err := h.userAssetService.UpdateWatchlistNotification(c.Request.Context(), req.UserID, watchlistID, req.NotifyEnabled)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if item == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "watchlist item not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, h.toWatchlistItemResponse(c.Request.Context(), *item))
+}
+
 func (h *Handler) GetRecent(c *gin.Context) {
 	userID, ok := parseUserIDQuery(c)
 	if !ok {
@@ -176,6 +202,8 @@ func (h *Handler) GetPreferences(c *gin.Context) {
 		UserID:               prefs.UserID,
 		Currency:             prefs.Currency,
 		NotificationsEnabled: prefs.NotificationsEnabled,
+		NotificationMode:     prefs.NotificationMode,
+		NotificationTime:     prefs.NotificationTime,
 		UpdatedAt:            prefs.UpdatedAt.Format(timeFormat),
 	})
 }
@@ -187,7 +215,7 @@ func (h *Handler) UpdatePreferences(c *gin.Context) {
 		return
 	}
 
-	prefs, err := h.userAssetService.UpdatePreferences(c.Request.Context(), req.UserID, req.Currency, req.NotificationsEnabled)
+	prefs, err := h.userAssetService.UpdatePreferences(c.Request.Context(), req.UserID, req.Currency, req.NotificationsEnabled, req.NotificationMode, req.NotificationTime)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -197,6 +225,8 @@ func (h *Handler) UpdatePreferences(c *gin.Context) {
 		UserID:               prefs.UserID,
 		Currency:             prefs.Currency,
 		NotificationsEnabled: prefs.NotificationsEnabled,
+		NotificationMode:     prefs.NotificationMode,
+		NotificationTime:     prefs.NotificationTime,
 		UpdatedAt:            prefs.UpdatedAt.Format(timeFormat),
 	})
 }
@@ -222,10 +252,11 @@ func (h *Handler) toWatchlistResponse(ctx context.Context, items []repository.Wa
 
 func (h *Handler) toWatchlistItemResponse(ctx context.Context, it repository.WatchlistItem) model.WatchlistItemResponse {
 	resp := model.WatchlistItemResponse{
-		ID:        it.ID,
-		UserID:    it.UserID,
-		ItemID:    it.ItemID,
-		CreatedAt: it.CreatedAt.Format(timeFormat),
+		ID:            it.ID,
+		UserID:        it.UserID,
+		ItemID:        it.ItemID,
+		NotifyEnabled: it.NotifyEnabled,
+		CreatedAt:     it.CreatedAt.Format(timeFormat),
 	}
 	if item, err := h.userAssetService.GetCatalogItem(ctx, it.ItemID); err == nil && item != nil {
 		resp.Item = &model.CatalogItemSummary{

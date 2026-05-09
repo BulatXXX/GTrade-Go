@@ -8,11 +8,14 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	authclient "gtrade/services/user-asset-service/internal/client/auth"
 	"gtrade/services/user-asset-service/internal/client/catalog"
+	notificationclient "gtrade/services/user-asset-service/internal/client/notification"
 	"gtrade/services/user-asset-service/internal/config"
 	"gtrade/services/user-asset-service/internal/handler"
 	httpserver "gtrade/services/user-asset-service/internal/http"
 	"gtrade/services/user-asset-service/internal/repository"
+	"gtrade/services/user-asset-service/internal/scheduler"
 	"gtrade/services/user-asset-service/internal/service"
 )
 
@@ -36,8 +39,18 @@ func Run(ctx context.Context) error {
 	repo := repository.NewUserAssetRepository(pool)
 	catalogClient := catalog.New(cfg.CatalogURL)
 	userAssetService := service.NewUserAssetService(repo, catalogClient)
+	authClient := authclient.New(cfg.AuthServiceURL, cfg.InternalAPIToken)
+	notificationClient := notificationclient.New(cfg.NotificationServiceURL)
+	priceAlertService := service.NewPriceAlertService(repo, catalogClient, authClient, notificationClient)
 	h := handler.New(cfg.ServiceName, userAssetService)
 	r := httpserver.NewRouter(logger, h)
+
+	alertInterval, err := time.ParseDuration(cfg.PriceAlertCheckInterval)
+	if err != nil {
+		return fmt.Errorf("parse PRICE_ALERT_CHECK_INTERVAL: %w", err)
+	}
+	priceAlertScheduler := scheduler.NewPriceAlertScheduler(logger, priceAlertService, alertInterval)
+	priceAlertScheduler.Start(ctx)
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),

@@ -17,16 +17,17 @@ import (
 )
 
 type stubUserAssetService struct {
-	createUserFn          func(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*repository.UserProfile, error)
-	getUserFn             func(ctx context.Context, userID int64) (*repository.UserProfile, error)
-	updateUserFn          func(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*repository.UserProfile, error)
-	listWatchlistFn       func(ctx context.Context, userID int64) ([]repository.WatchlistItem, error)
-	addWatchlistItemFn    func(ctx context.Context, userID int64, itemID string) (*repository.WatchlistItem, error)
-	deleteWatchlistItemFn func(ctx context.Context, userID, watchlistID int64) (bool, error)
-	listRecentFn          func(ctx context.Context, userID int64) ([]repository.WatchlistItem, error)
-	getPreferencesFn      func(ctx context.Context, userID int64) (*repository.UserPreferences, error)
-	updatePreferencesFn   func(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error)
-	getCatalogItemFn      func(ctx context.Context, itemID string) (*catalog.Item, error)
+	createUserFn                  func(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*repository.UserProfile, error)
+	getUserFn                     func(ctx context.Context, userID int64) (*repository.UserProfile, error)
+	updateUserFn                  func(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*repository.UserProfile, error)
+	listWatchlistFn               func(ctx context.Context, userID int64) ([]repository.WatchlistItem, error)
+	addWatchlistItemFn            func(ctx context.Context, userID int64, itemID string) (*repository.WatchlistItem, error)
+	updateWatchlistNotificationFn func(ctx context.Context, userID, watchlistID int64, notifyEnabled bool) (*repository.WatchlistItem, error)
+	deleteWatchlistItemFn         func(ctx context.Context, userID, watchlistID int64) (bool, error)
+	listRecentFn                  func(ctx context.Context, userID int64) ([]repository.WatchlistItem, error)
+	getPreferencesFn              func(ctx context.Context, userID int64) (*repository.UserPreferences, error)
+	updatePreferencesFn           func(ctx context.Context, userID int64, currency string, notificationsEnabled bool, notificationMode, notificationTime string) (*repository.UserPreferences, error)
+	getCatalogItemFn              func(ctx context.Context, itemID string) (*catalog.Item, error)
 }
 
 func (s stubUserAssetService) CreateUser(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*repository.UserProfile, error) {
@@ -44,6 +45,9 @@ func (s stubUserAssetService) ListWatchlist(ctx context.Context, userID int64) (
 func (s stubUserAssetService) AddWatchlistItem(ctx context.Context, userID int64, itemID string) (*repository.WatchlistItem, error) {
 	return s.addWatchlistItemFn(ctx, userID, itemID)
 }
+func (s stubUserAssetService) UpdateWatchlistNotification(ctx context.Context, userID, watchlistID int64, notifyEnabled bool) (*repository.WatchlistItem, error) {
+	return s.updateWatchlistNotificationFn(ctx, userID, watchlistID, notifyEnabled)
+}
 func (s stubUserAssetService) DeleteWatchlistItem(ctx context.Context, userID, watchlistID int64) (bool, error) {
 	return s.deleteWatchlistItemFn(ctx, userID, watchlistID)
 }
@@ -53,8 +57,8 @@ func (s stubUserAssetService) ListRecent(ctx context.Context, userID int64) ([]r
 func (s stubUserAssetService) GetPreferences(ctx context.Context, userID int64) (*repository.UserPreferences, error) {
 	return s.getPreferencesFn(ctx, userID)
 }
-func (s stubUserAssetService) UpdatePreferences(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error) {
-	return s.updatePreferencesFn(ctx, userID, currency, notificationsEnabled)
+func (s stubUserAssetService) UpdatePreferences(ctx context.Context, userID int64, currency string, notificationsEnabled bool, notificationMode, notificationTime string) (*repository.UserPreferences, error) {
+	return s.updatePreferencesFn(ctx, userID, currency, notificationsEnabled, notificationMode, notificationTime)
 }
 func (s stubUserAssetService) GetCatalogItem(ctx context.Context, itemID string) (*catalog.Item, error) {
 	return s.getCatalogItemFn(ctx, itemID)
@@ -80,6 +84,9 @@ func TestRouterSmoke_UserAssetFlows(t *testing.T) {
 		addWatchlistItemFn: func(ctx context.Context, userID int64, itemID string) (*repository.WatchlistItem, error) {
 			return &repository.WatchlistItem{ID: 2, UserID: userID, ItemID: itemID, CreatedAt: now}, nil
 		},
+		updateWatchlistNotificationFn: func(ctx context.Context, userID, watchlistID int64, notifyEnabled bool) (*repository.WatchlistItem, error) {
+			return &repository.WatchlistItem{ID: watchlistID, UserID: userID, ItemID: "item-1", NotifyEnabled: notifyEnabled, CreatedAt: now}, nil
+		},
 		deleteWatchlistItemFn: func(ctx context.Context, userID, watchlistID int64) (bool, error) {
 			return true, nil
 		},
@@ -87,10 +94,10 @@ func TestRouterSmoke_UserAssetFlows(t *testing.T) {
 			return []repository.WatchlistItem{{ID: 3, UserID: userID, ItemID: "item-2", CreatedAt: now}}, nil
 		},
 		getPreferencesFn: func(ctx context.Context, userID int64) (*repository.UserPreferences, error) {
-			return &repository.UserPreferences{UserID: userID, Currency: "usd", NotificationsEnabled: true, UpdatedAt: now}, nil
+			return &repository.UserPreferences{UserID: userID, Currency: "usd", NotificationsEnabled: true, NotificationMode: "daily_digest", NotificationTime: "09:00", UpdatedAt: now}, nil
 		},
-		updatePreferencesFn: func(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error) {
-			return &repository.UserPreferences{UserID: userID, Currency: currency, NotificationsEnabled: notificationsEnabled, UpdatedAt: now}, nil
+		updatePreferencesFn: func(ctx context.Context, userID int64, currency string, notificationsEnabled bool, notificationMode, notificationTime string) (*repository.UserPreferences, error) {
+			return &repository.UserPreferences{UserID: userID, Currency: currency, NotificationsEnabled: notificationsEnabled, NotificationMode: notificationMode, NotificationTime: notificationTime, UpdatedAt: now}, nil
 		},
 		getCatalogItemFn: func(ctx context.Context, itemID string) (*catalog.Item, error) {
 			return &catalog.Item{ID: itemID, Game: "warframe", Source: "market", Name: "Frost Prime Set", Slug: "frost_prime_set", ImageURL: "https://cdn/item.png", IsActive: true}, nil
@@ -111,9 +118,10 @@ func TestRouterSmoke_UserAssetFlows(t *testing.T) {
 		{"update user", http.MethodPut, "/users/1", map[string]any{"display_name": "Alice 2", "avatar_url": "https://cdn/2.png", "bio": "new"}, http.StatusOK, "display_name"},
 		{"get watchlist", http.MethodGet, "/watchlist?user_id=1", nil, http.StatusOK, "items"},
 		{"create watchlist", http.MethodPost, "/watchlist", map[string]any{"user_id": 1, "item_id": "item-1"}, http.StatusCreated, "item_id"},
+		{"update watchlist notifications", http.MethodPut, "/watchlist/2/notifications", map[string]any{"user_id": 1, "notify_enabled": false}, http.StatusOK, "notify_enabled"},
 		{"get recent", http.MethodGet, "/recent?user_id=1", nil, http.StatusOK, "items"},
 		{"get preferences", http.MethodGet, "/preferences?user_id=1", nil, http.StatusOK, "currency"},
-		{"update preferences", http.MethodPut, "/preferences", map[string]any{"user_id": 1, "currency": "eur", "notifications_enabled": false}, http.StatusOK, "currency"},
+		{"update preferences", http.MethodPut, "/preferences", map[string]any{"user_id": 1, "currency": "eur", "notifications_enabled": false, "notification_mode": "immediate", "notification_time": "10:15"}, http.StatusOK, "currency"},
 	}
 
 	for _, tt := range tests {
@@ -151,10 +159,13 @@ func TestRouterSmoke_ConflictOnDuplicateWatchlist(t *testing.T) {
 		addWatchlistItemFn: func(ctx context.Context, userID int64, itemID string) (*repository.WatchlistItem, error) {
 			return nil, repository.ErrDuplicate
 		},
+		updateWatchlistNotificationFn: func(ctx context.Context, userID, watchlistID int64, notifyEnabled bool) (*repository.WatchlistItem, error) {
+			return nil, nil
+		},
 		deleteWatchlistItemFn: func(ctx context.Context, userID, watchlistID int64) (bool, error) { return false, nil },
 		listRecentFn:          func(ctx context.Context, userID int64) ([]repository.WatchlistItem, error) { return nil, nil },
 		getPreferencesFn:      func(ctx context.Context, userID int64) (*repository.UserPreferences, error) { return nil, nil },
-		updatePreferencesFn: func(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error) {
+		updatePreferencesFn: func(ctx context.Context, userID int64, currency string, notificationsEnabled bool, notificationMode, notificationTime string) (*repository.UserPreferences, error) {
 			return nil, nil
 		},
 		getCatalogItemFn: func(ctx context.Context, itemID string) (*catalog.Item, error) {
@@ -200,12 +211,15 @@ func TestRouterSmoke_NotFoundUser(t *testing.T) {
 		addWatchlistItemFn: func(ctx context.Context, userID int64, itemID string) (*repository.WatchlistItem, error) {
 			return nil, nil
 		},
+		updateWatchlistNotificationFn: func(ctx context.Context, userID, watchlistID int64, notifyEnabled bool) (*repository.WatchlistItem, error) {
+			return nil, nil
+		},
 		deleteWatchlistItemFn: func(ctx context.Context, userID, watchlistID int64) (bool, error) { return false, nil },
 		listRecentFn:          func(ctx context.Context, userID int64) ([]repository.WatchlistItem, error) { return nil, nil },
 		getPreferencesFn: func(ctx context.Context, userID int64) (*repository.UserPreferences, error) {
 			return nil, errors.New("unexpected")
 		},
-		updatePreferencesFn: func(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error) {
+		updatePreferencesFn: func(ctx context.Context, userID int64, currency string, notificationsEnabled bool, notificationMode, notificationTime string) (*repository.UserPreferences, error) {
 			return nil, nil
 		},
 		getCatalogItemFn: func(ctx context.Context, itemID string) (*catalog.Item, error) { return nil, nil },
@@ -234,10 +248,13 @@ func TestRouterSmoke_CreateWatchlistFailsWhenCatalogItemMissing(t *testing.T) {
 		addWatchlistItemFn: func(ctx context.Context, userID int64, itemID string) (*repository.WatchlistItem, error) {
 			return nil, errors.New("catalog item not found")
 		},
+		updateWatchlistNotificationFn: func(ctx context.Context, userID, watchlistID int64, notifyEnabled bool) (*repository.WatchlistItem, error) {
+			return nil, nil
+		},
 		deleteWatchlistItemFn: func(ctx context.Context, userID, watchlistID int64) (bool, error) { return false, nil },
 		listRecentFn:          func(ctx context.Context, userID int64) ([]repository.WatchlistItem, error) { return nil, nil },
 		getPreferencesFn:      func(ctx context.Context, userID int64) (*repository.UserPreferences, error) { return nil, nil },
-		updatePreferencesFn: func(ctx context.Context, userID int64, currency string, notificationsEnabled bool) (*repository.UserPreferences, error) {
+		updatePreferencesFn: func(ctx context.Context, userID int64, currency string, notificationsEnabled bool, notificationMode, notificationTime string) (*repository.UserPreferences, error) {
 			return nil, nil
 		},
 		getCatalogItemFn: func(ctx context.Context, itemID string) (*catalog.Item, error) { return nil, nil },

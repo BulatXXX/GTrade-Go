@@ -9,6 +9,7 @@
 - профиль пользователя
 - watchlist предметов
 - пользовательские preferences
+- настройки уведомлений об изменении цен
 
 Watchlist связан с `catalog-service`:
 
@@ -85,6 +86,18 @@ curl -sS 'http://localhost:8082/watchlist?user_id=1'
 
 В ответе каждый элемент watchlist теперь может содержать вложенный объект `item` с базовыми данными из каталога.
 
+Каждый элемент watchlist также возвращает `notify_enabled`.
+
+### Update watchlist notifications
+
+```bash
+curl -X PUT http://localhost:8082/watchlist/1/notifications \
+  -H 'Content-Type: application/json' \
+  -d '{"user_id":1,"notify_enabled":false}'
+```
+
+Этот флаг управляет уведомлениями по конкретному item внутри watchlist.
+
 ### Delete watchlist item
 
 ```bash
@@ -102,8 +115,48 @@ curl -sS 'http://localhost:8082/preferences?user_id=1'
 ```bash
 curl -X PUT http://localhost:8082/preferences \
   -H 'Content-Type: application/json' \
-  -d '{"user_id":1,"currency":"usd","notifications_enabled":true}'
+  -d '{
+    "user_id":1,
+    "currency":"usd",
+    "notifications_enabled":true,
+    "notification_mode":"daily_digest",
+    "notification_time":"09:00"
+  }'
 ```
+
+Новые поля preferences:
+
+- `notification_mode`:
+  - `daily_digest` — одна digest-рассылка по расписанию
+  - `immediate` — отправка сразу при обнаружении изменения цены
+- `notification_time`:
+  - формат `HH:MM`
+  - на текущем этапе трактуется в `UTC`
+  - используется для режима `daily_digest`
+
+## Как работает price alert flow
+
+- `catalog-service` собирает daily history цен
+- `user-asset-service` по расписанию проходит по watchlist, где:
+  - глобально включены `notifications_enabled`
+  - для конкретного item включен `notify_enabled`
+- сервис берет email пользователя из `auth-service` через внутренний protected route
+- сервис читает `GET /items/:id/prices/history` из `catalog-service`
+- если цена изменилась, отправляет HTML-письмо через `notification-service`
+
+Текущее MVP поведение:
+
+- первое наблюдение за item только инициализирует state и не шлет backlog-уведомление
+- `daily_digest` отправляется после наступления указанного `notification_time`
+- `immediate` отправляет письмо в ближайшем scheduler cycle
+- для `tarkov` изменения отслеживаются отдельно по `game_mode`
+
+Полезные env:
+
+- `AUTH_SERVICE_URL`
+- `NOTIFICATION_SERVICE_URL`
+- `INTERNAL_API_TOKEN`
+- `PRICE_ALERT_CHECK_INTERVAL`
 
 ## Swagger / OpenAPI
 

@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"gtrade/services/auth-service/internal/model"
@@ -150,5 +151,30 @@ func (h *Handler) respondWithTokenPair(c *gin.Context, pair *service.TokenPair) 
 		RefreshToken: pair.RefreshToken,
 		TokenType:    "Bearer",
 		ExpiresIn:    pair.ExpiresIn,
+	})
+}
+
+func (h *Handler) GetInternalUserEmail(c *gin.Context) {
+	userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || userID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	contact, err := h.authService.GetUserContact(c.Request.Context(), userID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrUserNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "get user contact failed"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, model.InternalUserEmailResponse{
+		UserID:        contact.UserID,
+		Email:         contact.Email,
+		EmailVerified: contact.EmailVerified,
 	})
 }

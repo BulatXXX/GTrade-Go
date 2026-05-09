@@ -41,6 +41,12 @@ type AuthService struct {
 	verifyTTL  time.Duration
 }
 
+type UserContact struct {
+	UserID        int64
+	Email         string
+	EmailVerified bool
+}
+
 func NewAuthService(repo *repository.AuthRepository, jwtSecret string, notifier EmailNotifier) *AuthService {
 	if notifier == nil {
 		notifier = NoopEmailNotifier{}
@@ -252,6 +258,26 @@ func (s *AuthService) VerifyEmail(ctx context.Context, token string) error {
 		return err
 	}
 	return nil
+}
+
+func (s *AuthService) GetUserContact(ctx context.Context, userID int64) (*UserContact, error) {
+	if userID <= 0 {
+		return nil, ErrUserNotFound
+	}
+
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, ErrUserNotFound
+	}
+
+	return &UserContact{
+		UserID:        user.ID,
+		Email:         user.Email,
+		EmailVerified: user.EmailVerified,
+	}, nil
 }
 
 func (s *AuthService) issueTokenPair(ctx context.Context, userID int64) (*TokenPair, error) {
