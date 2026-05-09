@@ -62,11 +62,16 @@ type UpdateUserRoleRequest struct {
 	Role string `json:"role"`
 }
 
+type SetUserBlockedRequest struct {
+	Blocked bool `json:"blocked"`
+}
+
 type AdminUserResponse struct {
 	ID            int64  `json:"id"`
 	Email         string `json:"email"`
 	EmailVerified bool   `json:"email_verified"`
 	Role          string `json:"role"`
+	Blocked       bool   `json:"blocked"`
 	CreatedAt     string `json:"created_at"`
 }
 

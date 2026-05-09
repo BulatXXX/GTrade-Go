@@ -19,6 +19,7 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrInvalidToken       = errors.New("invalid token")
 	ErrUserNotFound       = errors.New("user not found")
+	ErrUserBlocked        = errors.New("user is blocked")
 )
 
 type TokenPair struct {
@@ -57,6 +58,7 @@ type UserSummary struct {
 	Email         string
 	EmailVerified bool
 	Role          string
+	Blocked       bool
 	CreatedAt     time.Time
 }
 
@@ -126,6 +128,10 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*Token
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		return nil, ErrInvalidCredentials
+	}
+
+	if user.BlockedAt != nil {
+		return nil, ErrUserBlocked
 	}
 
 	return s.issueTokenPair(ctx, user.ID)
@@ -341,6 +347,7 @@ func (s *AuthService) ListUsers(ctx context.Context) ([]UserSummary, error) {
 			Email:         user.Email,
 			EmailVerified: user.EmailVerified,
 			Role:          user.Role,
+			Blocked:       user.BlockedAt != nil,
 			CreatedAt:     user.CreatedAt,
 		})
 	}
@@ -368,6 +375,36 @@ func (s *AuthService) UpdateUserRole(ctx context.Context, userID int64, role str
 		Email:         user.Email,
 		EmailVerified: user.EmailVerified,
 		Role:          user.Role,
+		Blocked:       user.BlockedAt != nil,
+		CreatedAt:     user.CreatedAt,
+	}, nil
+}
+
+func (s *AuthService) SetUserBlocked(ctx context.Context, userID int64, blocked bool) (*UserSummary, error) {
+	if userID <= 0 {
+		return nil, ErrUserNotFound
+	}
+
+	user, err := s.repo.SetUserBlocked(ctx, userID, blocked)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, ErrUserNotFound
+	}
+
+	if blocked {
+		if err := s.repo.RevokeAllUserRefreshTokens(ctx, userID); err != nil {
+			return nil, err
+		}
+	}
+
+	return &UserSummary{
+		ID:            user.ID,
+		Email:         user.Email,
+		EmailVerified: user.EmailVerified,
+		Role:          user.Role,
+		Blocked:       user.BlockedAt != nil,
 		CreatedAt:     user.CreatedAt,
 	}, nil
 }
@@ -384,6 +421,9 @@ func (s *AuthService) issueTokenPair(ctx context.Context, userID int64) (*TokenP
 	}
 	if user == nil {
 		return nil, ErrUserNotFound
+	}
+	if user.BlockedAt != nil {
+		return nil, ErrUserBlocked
 	}
 
 	accessClaims := tokenClaims{

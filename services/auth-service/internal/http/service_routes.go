@@ -19,6 +19,7 @@ func registerServiceRoutes(r *gin.Engine, h *handler.Handler, jwtSecret, interna
 	adminGroup.Use(httpmiddleware.RequireRole("admin"))
 	adminGroup.GET("/users", h.ListUsers)
 	adminGroup.PUT("/users/:id/role", h.UpdateUserRole)
+	adminGroup.PUT("/users/:id/blocked", h.SetUserBlocked)
 
 	internalGroup := r.Group("/internal")
 	internalGroup.Use(httpmiddleware.RequireInternalToken(internalToken))

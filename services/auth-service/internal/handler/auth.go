@@ -43,11 +43,14 @@ func (h *Handler) Login(c *gin.Context) {
 
 	pair, err := h.authService.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidCredentials) {
+		switch {
+		case errors.Is(err, service.ErrInvalidCredentials):
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
-			return
+		case errors.Is(err, service.ErrUserBlocked):
+			c.JSON(http.StatusForbidden, gin.H{"error": "account is blocked"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "login failed"})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "login failed"})
 		return
 	}
 
@@ -219,6 +222,7 @@ func (h *Handler) ListUsers(c *gin.Context) {
 			Email:         user.Email,
 			EmailVerified: user.EmailVerified,
 			Role:          user.Role,
+			Blocked:       user.Blocked,
 			CreatedAt:     user.CreatedAt.Format(time.RFC3339),
 		})
 	}
@@ -255,6 +259,40 @@ func (h *Handler) UpdateUserRole(c *gin.Context) {
 		Email:         user.Email,
 		EmailVerified: user.EmailVerified,
 		Role:          user.Role,
+		Blocked:       user.Blocked,
+		CreatedAt:     user.CreatedAt.Format(time.RFC3339),
+	})
+}
+
+func (h *Handler) SetUserBlocked(c *gin.Context) {
+	userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || userID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	var req model.SetUserBlockedRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, err := h.authService.SetUserBlocked(c.Request.Context(), userID, req.Blocked)
+	if err != nil {
+		if errors.Is(err, service.ErrUserNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "set user blocked failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, model.AdminUserResponse{
+		ID:            user.ID,
+		Email:         user.Email,
+		EmailVerified: user.EmailVerified,
+		Role:          user.Role,
+		Blocked:       user.Blocked,
 		CreatedAt:     user.CreatedAt.Format(time.RFC3339),
 	})
 }

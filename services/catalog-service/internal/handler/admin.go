@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -18,7 +19,7 @@ func (h *Handler) GetStats(c *gin.Context) {
 }
 
 func (h *Handler) StartPriceHistorySync(c *gin.Context) {
-	job := h.adminService.StartPriceHistorySync(c.Request.Context())
+	job := h.adminService.StartPriceHistorySync(context.WithoutCancel(c.Request.Context()))
 	c.JSON(http.StatusAccepted, toAdminJobResponse(job))
 }
 
@@ -29,7 +30,7 @@ func (h *Handler) StartCatalogImport(c *gin.Context) {
 		return
 	}
 
-	job, err := h.adminService.StartCatalogImport(c.Request.Context(), req)
+	job, err := h.adminService.StartCatalogImport(context.WithoutCancel(c.Request.Context()), req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

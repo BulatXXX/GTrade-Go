@@ -18,6 +18,7 @@ type AuthUseCase interface {
 	ListUserContacts(ctx context.Context, verifiedOnly bool) ([]service.UserContact, error)
 	ListUsers(ctx context.Context) ([]service.UserSummary, error)
 	UpdateUserRole(ctx context.Context, userID int64, role string) (*service.UserSummary, error)
+	SetUserBlocked(ctx context.Context, userID int64, blocked bool) (*service.UserSummary, error)
 }
 
 type Handler struct {
