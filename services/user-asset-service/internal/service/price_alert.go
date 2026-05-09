@@ -31,6 +31,7 @@ type catalogPriceClient interface {
 
 type authContactClient interface {
 	GetUserContact(ctx context.Context, userID int64) (*authclient.UserContact, error)
+	ListUserContacts(ctx context.Context, verifiedOnly bool) ([]authclient.UserContact, error)
 }
 
 type notificationEmailClient interface {
@@ -64,6 +65,20 @@ type pendingUserNotification struct {
 	userID       int64
 	changes      []PriceAlertChange
 	stateUpdates []repository.WatchlistNotificationState
+}
+
+type ManualDispatchResult struct {
+	TargetUserID  int64
+	UsersChecked  int
+	EmailsSent    int
+	ChangesFound  int
+	UsersWithDiff int
+}
+
+type AdminMessageResult struct {
+	TargetUserID int64
+	UsersChecked int
+	EmailsSent   int
 }
 
 func NewPriceAlertService(repo priceAlertRepository, catalogClient catalogPriceClient, authClient authContactClient, notificationClient notificationEmailClient) *PriceAlertService {
@@ -152,7 +167,7 @@ func (s *PriceAlertService) RunCycle(ctx context.Context, now time.Time) error {
 	}
 
 	for _, pending := range immediate {
-		if err := s.dispatchUserNotification(ctx, pending, now, false); err != nil {
+		if _, err := s.dispatchUserNotification(ctx, pending, now, false); err != nil {
 			return err
 		}
 	}
@@ -160,7 +175,7 @@ func (s *PriceAlertService) RunCycle(ctx context.Context, now time.Time) error {
 	for userID := range dueDigestUsers {
 		pending := digest[userID]
 		if pending != nil {
-			if err := s.dispatchUserNotification(ctx, pending, now, true); err != nil {
+			if _, err := s.dispatchUserNotification(ctx, pending, now, true); err != nil {
 				return err
 			}
 			continue
@@ -171,6 +186,142 @@ func (s *PriceAlertService) RunCycle(ctx context.Context, now time.Time) error {
 	}
 
 	return nil
+}
+
+func (s *PriceAlertService) SendManualPriceAlerts(ctx context.Context, userID int64, now time.Time) (*ManualDispatchResult, error) {
+	if s == nil || s.repo == nil || s.catalog == nil || s.auth == nil || s.notification == nil {
+		return &ManualDispatchResult{TargetUserID: userID}, nil
+	}
+
+	subscriptions, err := s.repo.ListNotificationSubscriptions(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list notification subscriptions: %w", err)
+	}
+
+	pendingByUser := map[int64]*pendingUserNotification{}
+	checkedUsers := map[int64]bool{}
+
+	for _, sub := range subscriptions {
+		if userID > 0 && sub.UserID != userID {
+			continue
+		}
+		if !sub.NotificationsEnabled {
+			continue
+		}
+
+		checkedUsers[sub.UserID] = true
+
+		item, err := s.catalog.GetItem(ctx, sub.ItemID)
+		if err != nil || item == nil || !item.IsActive {
+			continue
+		}
+
+		historyResp, err := s.catalog.GetPriceHistory(ctx, sub.ItemID, "", 10)
+		if err != nil || historyResp == nil {
+			continue
+		}
+
+		states, err := s.repo.ListWatchlistNotificationStates(ctx, sub.WatchlistID)
+		if err != nil {
+			return nil, fmt.Errorf("list notification states: %w", err)
+		}
+
+		changes, initStates, sendStates := detectPriceAlertChanges(sub, item, historyResp.History, states, now)
+		for _, state := range initStates {
+			if err := s.repo.UpsertWatchlistNotificationState(ctx, state); err != nil {
+				return nil, fmt.Errorf("init notification state: %w", err)
+			}
+		}
+
+		if len(changes) == 0 {
+			continue
+		}
+
+		pending := pendingByUser[sub.UserID]
+		if pending == nil {
+			pending = &pendingUserNotification{mode: "immediate", userID: sub.UserID}
+			pendingByUser[sub.UserID] = pending
+		}
+		pending.changes = append(pending.changes, changes...)
+		pending.stateUpdates = append(pending.stateUpdates, sendStates...)
+	}
+
+	result := &ManualDispatchResult{
+		TargetUserID: userID,
+		UsersChecked: len(checkedUsers),
+	}
+
+	for _, pending := range pendingByUser {
+		result.ChangesFound += len(pending.changes)
+		if len(pending.changes) > 0 {
+			result.UsersWithDiff++
+		}
+		sent, err := s.dispatchUserNotification(ctx, pending, now, false)
+		if err != nil {
+			return nil, err
+		}
+		if sent {
+			result.EmailsSent++
+		}
+	}
+
+	return result, nil
+}
+
+func (s *PriceAlertService) SendAdminMessage(ctx context.Context, userID int64, subject, htmlBody, textBody string) (*AdminMessageResult, error) {
+	subject = strings.TrimSpace(subject)
+	htmlBody = strings.TrimSpace(htmlBody)
+	textBody = strings.TrimSpace(textBody)
+	if subject == "" {
+		return nil, fmt.Errorf("subject is required")
+	}
+	if htmlBody == "" && textBody == "" {
+		return nil, fmt.Errorf("html_body or text_body is required")
+	}
+
+	result := &AdminMessageResult{TargetUserID: userID}
+
+	if userID > 0 {
+		contact, err := s.auth.GetUserContact(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("get user contact: %w", err)
+		}
+		result.UsersChecked = 1
+		if contact == nil || strings.TrimSpace(contact.Email) == "" || !contact.EmailVerified {
+			return result, nil
+		}
+		if err := s.notification.SendEmail(ctx, notificationclient.SendEmailRequest{
+			To:       contact.Email,
+			Subject:  subject,
+			HTMLBody: htmlBody,
+			TextBody: textBody,
+		}); err != nil {
+			return nil, fmt.Errorf("send admin message: %w", err)
+		}
+		result.EmailsSent = 1
+		return result, nil
+	}
+
+	contacts, err := s.auth.ListUserContacts(ctx, true)
+	if err != nil {
+		return nil, fmt.Errorf("list user contacts: %w", err)
+	}
+	result.UsersChecked = len(contacts)
+	for _, contact := range contacts {
+		if strings.TrimSpace(contact.Email) == "" {
+			continue
+		}
+		if err := s.notification.SendEmail(ctx, notificationclient.SendEmailRequest{
+			To:       contact.Email,
+			Subject:  subject,
+			HTMLBody: htmlBody,
+			TextBody: textBody,
+		}); err != nil {
+			return nil, fmt.Errorf("send admin message: %w", err)
+		}
+		result.EmailsSent++
+	}
+	return result, nil
 }
 
 func (s *PriceAlertService) shouldProcessDigest(ctx context.Context, userID int64, notificationTime string, now time.Time) (bool, error) {
@@ -192,9 +343,9 @@ func (s *PriceAlertService) shouldProcessDigest(ctx context.Context, userID int6
 	return true, nil
 }
 
-func (s *PriceAlertService) dispatchUserNotification(ctx context.Context, pending *pendingUserNotification, now time.Time, markDigest bool) error {
+func (s *PriceAlertService) dispatchUserNotification(ctx context.Context, pending *pendingUserNotification, now time.Time, markDigest bool) (bool, error) {
 	if pending == nil {
-		return nil
+		return false, nil
 	}
 
 	sort.Slice(pending.changes, func(i, j int) bool {
@@ -208,21 +359,22 @@ func (s *PriceAlertService) dispatchUserNotification(ctx context.Context, pendin
 	if err != nil || contact == nil || strings.TrimSpace(contact.Email) == "" || !contact.EmailVerified {
 		for _, state := range pending.stateUpdates {
 			if upsertErr := s.repo.UpsertWatchlistNotificationState(ctx, withoutSentAt(state)); upsertErr != nil {
-				return fmt.Errorf("advance state without email: %w", upsertErr)
+				return false, fmt.Errorf("advance state without email: %w", upsertErr)
 			}
 		}
 		if markDigest {
 			if upsertErr := s.repo.UpsertUserNotificationDispatchState(ctx, pending.userID, dayStartUTC(now), nil); upsertErr != nil {
-				return fmt.Errorf("mark digest processed without email: %w", upsertErr)
+				return false, fmt.Errorf("mark digest processed without email: %w", upsertErr)
 			}
 		}
-		return nil
+		return false, nil
 	}
 
+	sent := false
 	if len(pending.changes) > 0 {
 		htmlBody, textBody, subject, err := renderPriceAlertEmail(pending.mode, pending.changes, now)
 		if err != nil {
-			return fmt.Errorf("render price alert email: %w", err)
+			return false, fmt.Errorf("render price alert email: %w", err)
 		}
 		if err := s.notification.SendEmail(ctx, notificationclient.SendEmailRequest{
 			To:       contact.Email,
@@ -230,23 +382,24 @@ func (s *PriceAlertService) dispatchUserNotification(ctx context.Context, pendin
 			HTMLBody: htmlBody,
 			TextBody: textBody,
 		}); err != nil {
-			return fmt.Errorf("send price alert email: %w", err)
+			return false, fmt.Errorf("send price alert email: %w", err)
 		}
+		sent = true
 	}
 
 	sentAt := now.UTC()
 	for _, state := range pending.stateUpdates {
 		state.LastNotificationSentAt = &sentAt
 		if err := s.repo.UpsertWatchlistNotificationState(ctx, state); err != nil {
-			return fmt.Errorf("upsert notification state after send: %w", err)
+			return false, fmt.Errorf("upsert notification state after send: %w", err)
 		}
 	}
 	if markDigest {
 		if err := s.repo.UpsertUserNotificationDispatchState(ctx, pending.userID, dayStartUTC(now), &sentAt); err != nil {
-			return fmt.Errorf("upsert digest dispatch state: %w", err)
+			return false, fmt.Errorf("upsert digest dispatch state: %w", err)
 		}
 	}
-	return nil
+	return sent, nil
 }
 
 func detectPriceAlertChanges(

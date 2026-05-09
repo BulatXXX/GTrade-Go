@@ -51,6 +51,14 @@ func (s stubCatalogUseCase) GetPriceHistory(ctx context.Context, itemID string, 
 	return s.getPriceHistoryFn(ctx, itemID, filter)
 }
 
+func (s stubCatalogUseCase) GetStats(ctx context.Context) (*model.CatalogStatsResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s stubCatalogUseCase) GetLocalizationCoverage(ctx context.Context, game string) (*model.LocalizationCoverageResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
 func TestGetPriceHistory_NormalizesGameModeAndReturnsHistory(t *testing.T) {
 	t.Parallel()
 
@@ -80,7 +88,7 @@ func TestGetPriceHistory_NormalizesGameModeAndReturnsHistory(t *testing.T) {
 				CollectedAt: time.Date(2026, 5, 9, 12, 0, 0, 0, time.UTC),
 			}}, nil
 		},
-	})
+	}, nil)
 
 	router := gin.New()
 	router.GET("/items/:id/prices/history", h.GetPriceHistory)
@@ -122,7 +130,7 @@ func TestGetPriceHistory_InvalidLimitReturnsBadRequest(t *testing.T) {
 			t.Fatal("GetPriceHistory must not be called")
 			return nil, nil
 		},
-	})
+	}, nil)
 
 	router := gin.New()
 	router.GET("/items/:id/prices/history", h.GetPriceHistory)
@@ -145,7 +153,7 @@ func TestGetPriceHistory_ItemNotFoundReturnsNotFound(t *testing.T) {
 		getPriceHistoryFn: func(ctx context.Context, itemID string, filter model.PriceHistoryFilter) ([]model.PriceHistoryEntry, error) {
 			return nil, repository.ErrItemNotFound
 		},
-	})
+	}, nil)
 
 	router := gin.New()
 	router.GET("/items/:id/prices/history", h.GetPriceHistory)
@@ -168,7 +176,7 @@ func TestGetPriceHistory_InvalidFilterReturnsBadRequest(t *testing.T) {
 		getPriceHistoryFn: func(ctx context.Context, itemID string, filter model.PriceHistoryFilter) ([]model.PriceHistoryEntry, error) {
 			return nil, service.ErrInvalidInput
 		},
-	})
+	}, nil)
 
 	router := gin.New()
 	router.GET("/items/:id/prices/history", h.GetPriceHistory)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"gtrade/services/catalog-service/internal/adminjobs"
 	"gtrade/services/catalog-service/internal/client/integration"
 	"gtrade/services/catalog-service/internal/config"
 	"gtrade/services/catalog-service/internal/handler"
@@ -37,8 +38,6 @@ func Run(ctx context.Context) error {
 
 	repo := repository.NewCatalogRepository(pool)
 	svc := service.New(repo)
-	h := handler.New(cfg.ServiceName, svc)
-	r := httpserver.NewRouter(logger, h)
 
 	refreshInterval, err := time.ParseDuration(cfg.PriceHistoryRefreshInterval)
 	if err != nil {
@@ -48,6 +47,12 @@ func Run(ctx context.Context) error {
 	integrationClient := integration.New(cfg.IntegrationServiceURL)
 	priceCollector := scheduler.NewPriceHistoryCollector(logger, svc, integrationClient, refreshInterval)
 	priceCollector.Start(ctx)
+	jobManager := adminjobs.NewManager()
+	priceHistoryRunner := adminjobs.NewPriceHistorySyncRunner(jobManager, priceCollector)
+	catalogImportRunner := adminjobs.NewCatalogImportRunner(jobManager, svc)
+	adminRunner := adminjobs.NewCompositeRunner(priceHistoryRunner, catalogImportRunner)
+	h := handler.New(cfg.ServiceName, svc, adminRunner)
+	r := httpserver.NewRouterWithSecurity(logger, h, cfg.JWTSecret)
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),

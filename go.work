@@ -1,6 +1,7 @@
 go 1.23.0
 
 use (
+	./shared/catalogimport
 	./shared/httpmiddleware
 	./services/api-gateway
 	./services/api-integration-service

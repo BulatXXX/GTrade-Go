@@ -24,6 +24,12 @@ type PriceHistoryCollector struct {
 	interval time.Duration
 }
 
+type ProgressObserver interface {
+	OnStart(total int)
+	OnItemProcessed()
+	OnFinish()
+}
+
 func NewPriceHistoryCollector(
 	logger zerolog.Logger,
 	service CatalogService,
@@ -44,7 +50,7 @@ func (c *PriceHistoryCollector) Start(ctx context.Context) {
 	}
 
 	go func() {
-		c.runOnce(ctx)
+		c.RunOnce(ctx, nil)
 
 		ticker := time.NewTicker(c.interval)
 		defer ticker.Stop()
@@ -54,17 +60,36 @@ func (c *PriceHistoryCollector) Start(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				c.runOnce(ctx)
+				c.RunOnce(ctx, nil)
 			}
 		}
 	}()
 }
 
-func (c *PriceHistoryCollector) runOnce(ctx context.Context) {
+func (c *PriceHistoryCollector) RunOnce(ctx context.Context, observer ProgressObserver) {
 	const batchSize = 100
 
 	runCtx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
+
+	total := 0
+	for offset := 0; ; offset += batchSize {
+		items, err := c.service.ListActiveItemsForPriceSync(runCtx, batchSize, offset)
+		if err != nil {
+			c.logger.Error().Err(err).Msg("price history: list active items failed")
+			return
+		}
+		if len(items) == 0 {
+			break
+		}
+		total += len(items)
+		if len(items) < batchSize {
+			break
+		}
+	}
+	if observer != nil {
+		observer.OnStart(total)
+	}
 
 	var processed int
 	for offset := 0; ; offset += batchSize {
@@ -79,7 +104,14 @@ func (c *PriceHistoryCollector) runOnce(ctx context.Context) {
 
 		for _, item := range items {
 			processed += c.collectItem(runCtx, item)
+			if observer != nil {
+				observer.OnItemProcessed()
+			}
 		}
+	}
+
+	if observer != nil {
+		observer.OnFinish()
 	}
 
 	c.logger.Info().Int("processed_items", processed).Msg("price history: sync finished")

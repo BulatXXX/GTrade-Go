@@ -169,6 +169,55 @@ curl -sS -X POST http://localhost:8084/items/upsert \
 
 `POST /items/upsert` используется `tools/catalog-importer` как ingestion endpoint.
 
+Для admin-панели теперь есть background import flow без отдельного CLI на сервере:
+
+```bash
+curl -sS -X POST http://localhost:8084/admin/jobs/catalog-import \
+  -H 'Authorization: Bearer <ADMIN_JWT>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "game":"warframe",
+    "language":"ru",
+    "limit":250
+  }'
+```
+
+Что означает запрос:
+
+- `game` — какой каталог импортировать: `warframe`, `eve`, `tarkov`
+- `language` — какую локализацию догружать поверх базового `en`
+- `limit` — ограничение на размер прогона, `0` означает полный импорт
+
+Проверка прогресса:
+
+```bash
+curl -sS -H 'Authorization: Bearer <ADMIN_JWT>' http://localhost:8084/admin/jobs
+```
+
+В ответе у job будет:
+
+- `progress_percent`
+- `processed`
+- `total`
+- `meta.game`
+- `meta.language`
+- `meta.limit`
+
+Покрытие локализаций по языкам:
+
+```bash
+curl -sS -H 'Authorization: Bearer <ADMIN_JWT>' \
+  'http://localhost:8084/admin/localizations/coverage?game=warframe'
+```
+
+Этот endpoint показывает:
+
+- сколько всего предметов есть у игры
+- сколько уже имеют перевод для конкретного языка
+- сколько переводов еще не хватает
+- какой процент покрыт по `name`
+- какой процент покрыт по `description`
+
 Для чтения истории цен:
 
 ```bash

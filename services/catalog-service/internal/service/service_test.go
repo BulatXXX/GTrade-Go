@@ -311,6 +311,10 @@ type stubRepository struct {
 	listPriceSyncItemsFn func(ctx context.Context, limit, offset int) ([]model.Item, error)
 	upsertPriceHistoryFn func(ctx context.Context, input model.UpsertPriceHistoryInput) error
 	getPriceHistoryFn    func(ctx context.Context, itemID string, filter model.PriceHistoryFilter) ([]model.PriceHistoryEntry, error)
+	countItemsFn         func(ctx context.Context) (int, error)
+	countActiveItemsFn   func(ctx context.Context) (int, error)
+	countPriceRowsFn     func(ctx context.Context) (int, error)
+	countCoverageFn      func(ctx context.Context, game string) ([]model.LocalizationCoverageRow, error)
 }
 
 func (s stubRepository) CreateItem(ctx context.Context, input model.CreateItemInput) (*model.Item, error) {
@@ -381,4 +385,32 @@ func (s stubRepository) GetPriceHistory(ctx context.Context, itemID string, filt
 		return nil, errors.New("unexpected GetPriceHistory call")
 	}
 	return s.getPriceHistoryFn(ctx, itemID, filter)
+}
+
+func (s stubRepository) CountItems(ctx context.Context) (int, error) {
+	if s.countItemsFn == nil {
+		return 0, nil
+	}
+	return s.countItemsFn(ctx)
+}
+
+func (s stubRepository) CountActiveItems(ctx context.Context) (int, error) {
+	if s.countActiveItemsFn == nil {
+		return 0, nil
+	}
+	return s.countActiveItemsFn(ctx)
+}
+
+func (s stubRepository) CountPriceHistoryRows(ctx context.Context) (int, error) {
+	if s.countPriceRowsFn == nil {
+		return 0, nil
+	}
+	return s.countPriceRowsFn(ctx)
+}
+
+func (s stubRepository) CountLocalizationCoverage(ctx context.Context, game string) ([]model.LocalizationCoverageRow, error) {
+	if s.countCoverageFn == nil {
+		return nil, nil
+	}
+	return s.countCoverageFn(ctx, game)
 }

@@ -24,6 +24,9 @@ type stubAuthService struct {
 	requestEmailVerificationFn func(ctx context.Context, email string) (string, error)
 	verifyEmailFn              func(ctx context.Context, token string) error
 	getUserContactFn           func(ctx context.Context, userID int64) (*service.UserContact, error)
+	listUserContactsFn         func(ctx context.Context, verifiedOnly bool) ([]service.UserContact, error)
+	listUsersFn                func(ctx context.Context) ([]service.UserSummary, error)
+	updateUserRoleFn           func(ctx context.Context, userID int64, role string) (*service.UserSummary, error)
 }
 
 func (s stubAuthService) Register(ctx context.Context, email, password string) (*service.TokenPair, error) {
@@ -56,6 +59,18 @@ func (s stubAuthService) VerifyEmail(ctx context.Context, token string) error {
 
 func (s stubAuthService) GetUserContact(ctx context.Context, userID int64) (*service.UserContact, error) {
 	return s.getUserContactFn(ctx, userID)
+}
+
+func (s stubAuthService) ListUserContacts(ctx context.Context, verifiedOnly bool) ([]service.UserContact, error) {
+	return s.listUserContactsFn(ctx, verifiedOnly)
+}
+
+func (s stubAuthService) ListUsers(ctx context.Context) ([]service.UserSummary, error) {
+	return s.listUsersFn(ctx)
+}
+
+func (s stubAuthService) UpdateUserRole(ctx context.Context, userID int64, role string) (*service.UserSummary, error) {
+	return s.updateUserRoleFn(ctx, userID, role)
 }
 
 func TestRouterSmoke(t *testing.T) {
@@ -124,6 +139,13 @@ func TestRouterSmoke(t *testing.T) {
 					Email:         "user@example.com",
 					EmailVerified: true,
 				}, nil
+			},
+			listUserContactsFn: func(ctx context.Context, verifiedOnly bool) ([]service.UserContact, error) {
+				return []service.UserContact{{
+					UserID:        1,
+					Email:         "user@example.com",
+					EmailVerified: true,
+				}}, nil
 			},
 		}),
 	)
@@ -297,7 +319,7 @@ func TestRouterSmoke(t *testing.T) {
 func TestRouterSmoke_InternalUserEmailRequiresTokenAndReturnsContact(t *testing.T) {
 	t.Parallel()
 
-	router := NewRouterWithInternalToken(
+	router := NewRouterWithSecurity(
 		zerolog.Nop(),
 		handler.New("auth-service", stubAuthService{
 			getUserContactFn: func(ctx context.Context, userID int64) (*service.UserContact, error) {
@@ -308,6 +330,7 @@ func TestRouterSmoke_InternalUserEmailRequiresTokenAndReturnsContact(t *testing.
 				}, nil
 			},
 		}),
+		"",
 		"test-internal-token",
 	)
 

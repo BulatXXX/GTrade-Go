@@ -8,10 +8,10 @@ import (
 	"os"
 	"time"
 
-	"gtrade/tools/catalog-importer/internal/importer"
-	"gtrade/tools/catalog-importer/internal/repository"
-	"gtrade/tools/catalog-importer/internal/source"
-	"gtrade/tools/catalog-importer/internal/transform"
+	"github.com/singularity/gtrade/shared/catalogimport/httprepository"
+	"github.com/singularity/gtrade/shared/catalogimport/importer"
+	"github.com/singularity/gtrade/shared/catalogimport/source"
+	"github.com/singularity/gtrade/shared/catalogimport/transform"
 )
 
 func main() {
@@ -38,11 +38,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	repo := repository.NewCatalogHTTPRepository(*catalogURL, *dryRun)
+	repo := httprepository.New(*catalogURL, *dryRun)
 	tr := transform.NewNoopTransformer()
 	imp := importer.New(src, tr, repo)
 
-	if err := imp.Run(context.Background()); err != nil {
+	if _, _, err := imp.Run(context.Background()); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

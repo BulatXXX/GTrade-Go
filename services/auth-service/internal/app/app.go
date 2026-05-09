@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -34,9 +35,9 @@ func Run(ctx context.Context) error {
 
 	authRepo := repository.NewAuthRepository(pool)
 	notifier := service.NewNotificationClient(cfg.NotificationServiceURL)
-	authService := service.NewAuthService(authRepo, cfg.JWTSecret, notifier)
+	authService := service.NewAuthService(authRepo, cfg.JWTSecret, notifier, splitCSV(cfg.AdminEmails)...)
 	h := handler.New(cfg.ServiceName, authService)
-	r := httpserver.NewRouterWithInternalToken(logger, h, cfg.InternalAPIToken)
+	r := httpserver.NewRouterWithSecurity(logger, h, cfg.JWTSecret, cfg.InternalAPIToken)
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),
@@ -64,4 +65,18 @@ func Run(ctx context.Context) error {
 		}
 		return nil
 	}
+}
+
+func splitCSV(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }

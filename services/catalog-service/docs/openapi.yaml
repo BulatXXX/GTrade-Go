@@ -364,6 +364,111 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /admin/stats:
+    get:
+      summary: Get catalog admin stats
+      tags: [admin]
+      responses:
+        '200':
+          description: Catalog stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogStatsResponse'
+  /admin/localizations/coverage:
+    get:
+      summary: Get localization coverage by game and language
+      tags: [admin]
+      parameters:
+        - in: query
+          name: game
+          schema:
+            type: string
+          description: Optional game filter, for example `warframe`, `eve` or `tarkov`
+      responses:
+        '200':
+          description: Localization coverage rows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalizationCoverageResponse'
+  /admin/jobs/catalog-import:
+    post:
+      summary: Start catalog import job
+      description: |
+        Starts background metadata import for one game and one target language.
+        Progress is exposed through `/admin/jobs` and `/admin/jobs/{id}`.
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminCatalogImportRequest'
+      responses:
+        '202':
+          description: Import job started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminJobStatusResponse'
+        '400':
+          description: Invalid import request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /admin/jobs/price-history-sync:
+    post:
+      summary: Start full price history sync job
+      tags: [admin]
+      responses:
+        '202':
+          description: Price history job started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminJobStatusResponse'
+  /admin/jobs:
+    get:
+      summary: List admin jobs
+      tags: [admin]
+      responses:
+        '200':
+          description: Background jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [jobs]
+                properties:
+                  jobs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminJobStatusResponse'
+  /admin/jobs/{id}:
+    get:
+      summary: Get admin job status
+      tags: [admin]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminJobStatusResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   schemas:
     HealthResponse:
@@ -569,6 +674,118 @@ components:
         status:
           type: string
           example: deactivated
+    CatalogStatsResponse:
+      type: object
+      required: [total_items, active_items, price_history_rows]
+      properties:
+        total_items:
+          type: integer
+          example: 12000
+        active_items:
+          type: integer
+          example: 11800
+        price_history_rows:
+          type: integer
+          example: 564000
+    LocalizationCoverageRow:
+      type: object
+      required:
+        - game
+        - language_code
+        - total_items
+        - translated_items
+        - missing_items
+        - coverage_percent
+        - description_filled_items
+        - description_coverage_percent
+      properties:
+        game:
+          type: string
+          example: warframe
+        language_code:
+          type: string
+          example: ru
+        total_items:
+          type: integer
+          example: 1000
+        translated_items:
+          type: integer
+          example: 760
+        missing_items:
+          type: integer
+          example: 240
+        coverage_percent:
+          type: number
+          format: double
+          example: 76
+        description_filled_items:
+          type: integer
+          example: 710
+        description_coverage_percent:
+          type: number
+          format: double
+          example: 71
+    LocalizationCoverageResponse:
+      type: object
+      required: [coverage]
+      properties:
+        game:
+          type: string
+          example: warframe
+        coverage:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocalizationCoverageRow'
+    AdminCatalogImportRequest:
+      type: object
+      required: [game]
+      properties:
+        game:
+          type: string
+          example: warframe
+        language:
+          type: string
+          example: ru
+        limit:
+          type: integer
+          format: int32
+          minimum: 0
+          example: 250
+    AdminJobStatusResponse:
+      type: object
+      required: [id, type, status, progress_percent, processed, total, started_at]
+      properties:
+        id:
+          type: string
+          example: catalog-import-1746754500000000000
+        type:
+          type: string
+          example: catalog-import
+        status:
+          type: string
+          example: running
+        progress_percent:
+          type: integer
+          example: 42
+        processed:
+          type: integer
+          example: 420
+        total:
+          type: integer
+          example: 1000
+        error:
+          type: string
+          example: unsupported source
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        meta:
+          type: object
+          additionalProperties:
+            type: string
     ErrorResponse:
       type: object
       required: [error]

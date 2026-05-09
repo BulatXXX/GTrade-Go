@@ -26,6 +26,10 @@ type Repository interface {
 	ListActiveItemsForPriceSync(ctx context.Context, limit, offset int) ([]model.Item, error)
 	UpsertPriceHistory(ctx context.Context, input model.UpsertPriceHistoryInput) error
 	GetPriceHistory(ctx context.Context, itemID string, filter model.PriceHistoryFilter) ([]model.PriceHistoryEntry, error)
+	CountItems(ctx context.Context) (int, error)
+	CountActiveItems(ctx context.Context) (int, error)
+	CountPriceHistoryRows(ctx context.Context) (int, error)
+	CountLocalizationCoverage(ctx context.Context, game string) ([]model.LocalizationCoverageRow, error)
 }
 
 type Service struct {
@@ -157,6 +161,41 @@ func (s *Service) ListActiveItemsForPriceSync(ctx context.Context, limit, offset
 		return nil, ErrInvalidInput
 	}
 	return s.repo.ListActiveItemsForPriceSync(ctx, limit, offset)
+}
+
+func (s *Service) GetStats(ctx context.Context) (*model.CatalogStatsResponse, error) {
+	totalItems, err := s.repo.CountItems(ctx)
+	if err != nil {
+		return nil, err
+	}
+	activeItems, err := s.repo.CountActiveItems(ctx)
+	if err != nil {
+		return nil, err
+	}
+	priceRows, err := s.repo.CountPriceHistoryRows(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.CatalogStatsResponse{
+		TotalItems:       totalItems,
+		ActiveItems:      activeItems,
+		PriceHistoryRows: priceRows,
+	}, nil
+}
+
+func (s *Service) GetLocalizationCoverage(ctx context.Context, game string) (*model.LocalizationCoverageResponse, error) {
+	game = strings.TrimSpace(game)
+
+	coverage, err := s.repo.CountLocalizationCoverage(ctx, game)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.LocalizationCoverageResponse{
+		Game:     game,
+		Coverage: coverage,
+	}, nil
 }
 
 func validateCreateInput(input model.CreateItemInput) error {

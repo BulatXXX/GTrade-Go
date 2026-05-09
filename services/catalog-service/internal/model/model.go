@@ -133,3 +133,44 @@ type PriceHistoryResponse struct {
 type DeleteItemResponse struct {
 	Status string `json:"status"`
 }
+
+type CatalogStatsResponse struct {
+	TotalItems       int `json:"total_items"`
+	ActiveItems      int `json:"active_items"`
+	PriceHistoryRows int `json:"price_history_rows"`
+}
+
+type LocalizationCoverageRow struct {
+	Game                       string  `json:"game"`
+	LanguageCode               string  `json:"language_code"`
+	TotalItems                 int     `json:"total_items"`
+	TranslatedItems            int     `json:"translated_items"`
+	MissingItems               int     `json:"missing_items"`
+	CoveragePercent            float64 `json:"coverage_percent"`
+	DescriptionFilledItems     int     `json:"description_filled_items"`
+	DescriptionCoveragePercent float64 `json:"description_coverage_percent"`
+}
+
+type LocalizationCoverageResponse struct {
+	Game     string                    `json:"game,omitempty"`
+	Coverage []LocalizationCoverageRow `json:"coverage"`
+}
+
+type AdminCatalogImportRequest struct {
+	Game     string `json:"game"`
+	Language string `json:"language"`
+	Limit    int    `json:"limit"`
+}
+
+type AdminJobStatusResponse struct {
+	ID              string            `json:"id"`
+	Type            string            `json:"type"`
+	Status          string            `json:"status"`
+	ProgressPercent int               `json:"progress_percent"`
+	Processed       int               `json:"processed"`
+	Total           int               `json:"total"`
+	Error           string            `json:"error,omitempty"`
+	StartedAt       string            `json:"started_at"`
+	FinishedAt      string            `json:"finished_at,omitempty"`
+	Meta            map[string]string `json:"meta,omitempty"`
+}

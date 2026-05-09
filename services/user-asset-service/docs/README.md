@@ -151,6 +151,32 @@ curl -X PUT http://localhost:8082/preferences \
 - `immediate` отправляет письмо в ближайшем scheduler cycle
 - для `tarkov` изменения отслеживаются отдельно по `game_mode`
 
+## Admin manual send
+
+Немедленная отправка price alerts без ожидания scheduler:
+
+```bash
+curl -X POST http://localhost:8082/admin/price-alerts/send \
+  -H 'Content-Type: application/json' \
+  -d '{"user_id":1}'
+```
+
+Если `user_id` не передан, сервис проходит по всем watchlist-подпискам, сравнивает старые и новые цены и рассылает письма только тем пользователям, у кого реально найден diff.
+
+Кастомное письмо из админ-панели через `notification-service`:
+
+```bash
+curl -X POST http://localhost:8082/admin/messages/send \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "subject":"GTrade maintenance",
+    "html_body":"<p>Maintenance starts at 22:00 UTC</p>",
+    "text_body":"Maintenance starts at 22:00 UTC"
+  }'
+```
+
+Если `user_id` не передан, сообщение уйдет всем пользователям с подтвержденным email.
+
 Полезные env:
 
 - `AUTH_SERVICE_URL`

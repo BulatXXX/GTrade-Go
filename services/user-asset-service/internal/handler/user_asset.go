@@ -231,6 +231,36 @@ func (h *Handler) UpdatePreferences(c *gin.Context) {
 	})
 }
 
+func (h *Handler) SendManualPriceAlerts(c *gin.Context) {
+	var req model.AdminManualPriceAlertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	resp, err := h.userAssetService.SendManualPriceAlerts(c.Request.Context(), req.UserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *Handler) SendAdminMessage(c *gin.Context) {
+	var req model.AdminSendMessageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	resp, err := h.userAssetService.SendAdminMessage(c.Request.Context(), req.UserID, req.Subject, req.HTMLBody, req.TextBody)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
 const timeFormat = "2006-01-02T15:04:05Z07:00"
 
 func parseUserIDQuery(c *gin.Context) (int64, bool) {

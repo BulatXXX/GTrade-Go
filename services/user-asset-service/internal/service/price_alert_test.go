@@ -57,11 +57,16 @@ func (s stubPriceAlertCatalog) GetPriceHistory(ctx context.Context, id, gameMode
 }
 
 type stubPriceAlertAuth struct {
-	contact *authclient.UserContact
+	contact  *authclient.UserContact
+	contacts []authclient.UserContact
 }
 
 func (s stubPriceAlertAuth) GetUserContact(ctx context.Context, userID int64) (*authclient.UserContact, error) {
 	return s.contact, nil
+}
+
+func (s stubPriceAlertAuth) ListUserContacts(ctx context.Context, verifiedOnly bool) ([]authclient.UserContact, error) {
+	return s.contacts, nil
 }
 
 type stubPriceAlertNotification struct {
@@ -198,5 +203,30 @@ func TestPriceAlertService_RunCycleImmediateSendsEmailAndAdvancesState(t *testin
 	}
 	if repo.upsertedStates[0].LastNotificationSentAt == nil {
 		t.Fatalf("expected LastNotificationSentAt to be set: %#v", repo.upsertedStates[0])
+	}
+}
+
+func TestPriceAlertService_SendAdminMessageToAllVerifiedUsers(t *testing.T) {
+	t.Parallel()
+
+	notificationClient := &stubPriceAlertNotification{}
+	svc := NewPriceAlertService(
+		&stubPriceAlertRepo{},
+		stubPriceAlertCatalog{},
+		stubPriceAlertAuth{
+			contacts: []authclient.UserContact{
+				{UserID: 1, Email: "one@example.com", EmailVerified: true},
+				{UserID: 2, Email: "two@example.com", EmailVerified: true},
+			},
+		},
+		notificationClient,
+	)
+
+	result, err := svc.SendAdminMessage(context.Background(), 0, "System update", "<p>Hello</p>", "Hello")
+	if err != nil {
+		t.Fatalf("SendAdminMessage: %v", err)
+	}
+	if result.EmailsSent != 2 || len(notificationClient.requests) != 2 {
+		t.Fatalf("result=%#v requests=%d", result, len(notificationClient.requests))
 	}
 }

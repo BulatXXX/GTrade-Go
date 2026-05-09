@@ -15,6 +15,9 @@ type AuthUseCase interface {
 	RequestEmailVerification(ctx context.Context, email string) (string, error)
 	VerifyEmail(ctx context.Context, token string) error
 	GetUserContact(ctx context.Context, userID int64) (*service.UserContact, error)
+	ListUserContacts(ctx context.Context, verifiedOnly bool) ([]service.UserContact, error)
+	ListUsers(ctx context.Context) ([]service.UserSummary, error)
+	UpdateUserRole(ctx context.Context, userID int64, role string) (*service.UserSummary, error)
 }
 
 type Handler struct {

@@ -273,6 +273,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /internal/users/contacts:
+    get:
+      summary: List user contacts for internal service-to-service flows
+      tags: [internal]
+      parameters:
+        - in: query
+          name: verified_only
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: User contacts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalUserContactsResponse'
+        '401':
+          description: Missing or invalid internal token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: User contacts lookup failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   schemas:
     HealthResponse:
@@ -393,6 +422,14 @@ components:
         email_verified:
           type: boolean
           example: true
+    InternalUserContactsResponse:
+      type: object
+      required: [users]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/InternalUserEmailResponse'
     ErrorResponse:
       type: object
       required: [error]

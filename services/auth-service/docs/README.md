@@ -82,6 +82,12 @@ http://localhost:8081
 GET /internal/users/:id/email
 ```
 
+И список контактов:
+
+```text
+GET /internal/users/contacts?verified_only=true
+```
+
 Он требует `X-Internal-Token` и используется соседними сервисами для системных уведомлений.
 
 ### 1. Health

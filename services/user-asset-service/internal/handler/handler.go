@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"gtrade/services/user-asset-service/internal/client/catalog"
+	"gtrade/services/user-asset-service/internal/model"
 	"gtrade/services/user-asset-service/internal/repository"
 )
 
@@ -24,6 +25,8 @@ type UserAssetUseCase interface {
 	GetPreferences(ctx context.Context, userID int64) (*repository.UserPreferences, error)
 	UpdatePreferences(ctx context.Context, userID int64, currency string, notificationsEnabled bool, notificationMode, notificationTime string) (*repository.UserPreferences, error)
 	GetCatalogItem(ctx context.Context, itemID string) (*catalog.Item, error)
+	SendManualPriceAlerts(ctx context.Context, userID int64) (*model.AdminManualPriceAlertResponse, error)
+	SendAdminMessage(ctx context.Context, userID int64, subject, htmlBody, textBody string) (*model.AdminSendMessageResponse, error)
 }
 
 func New(serviceName string, userAssetService UserAssetUseCase) *Handler {

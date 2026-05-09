@@ -27,8 +27,11 @@ func TestRouterSmoke_ProxiesPublicRoutes(t *testing.T) {
 		forwardFn: func(ctx context.Context, target string, req service.ForwardRequest) (*service.ForwardResponse, error) {
 			switch target {
 			case service.TargetAuth:
-				if req.Path != "/login" {
-					t.Fatalf("auth path = %q, want /login", req.Path)
+				switch req.Path {
+				case "/login":
+				case "/admin/users":
+				default:
+					t.Fatalf("auth path = %q", req.Path)
 				}
 				return &service.ForwardResponse{StatusCode: http.StatusOK, Body: []byte(`{"service":"auth"}`)}, nil
 			case service.TargetCatalog:
@@ -41,6 +44,7 @@ func TestRouterSmoke_ProxiesPublicRoutes(t *testing.T) {
 					if req.RawQuery != "game_mode=pve&limit=30" {
 						t.Fatalf("catalog history path/query = %q?%s", req.Path, req.RawQuery)
 					}
+				case "/admin/stats":
 				default:
 					t.Fatalf("unexpected catalog path/query = %q?%s", req.Path, req.RawQuery)
 				}
@@ -51,8 +55,15 @@ func TestRouterSmoke_ProxiesPublicRoutes(t *testing.T) {
 				}
 				return &service.ForwardResponse{StatusCode: http.StatusOK, Body: []byte(`{"service":"integration"}`)}, nil
 			default:
-				t.Fatalf("unexpected target: %s", target)
-				return nil, nil
+				if target != service.TargetUserAsset {
+					t.Fatalf("unexpected target: %s", target)
+				}
+				switch req.Path {
+				case "/admin/price-alerts/send":
+				default:
+					t.Fatalf("unexpected user-asset admin path = %q", req.Path)
+				}
+				return &service.ForwardResponse{StatusCode: http.StatusOK, Body: []byte(`{"service":"user-asset-admin"}`)}, nil
 			}
 		},
 	}), "test-secret")
@@ -156,6 +167,53 @@ func TestRouterSmoke_ProtectedRoutesProxyWithJWT(t *testing.T) {
 	}
 }
 
+func TestRouterSmoke_AdminRoutesRequireAdminRole(t *testing.T) {
+	t.Parallel()
+
+	router := NewRouter(zerolog.Nop(), handler.New("api-gateway", stubGatewayService{
+		forwardFn: func(ctx context.Context, target string, req service.ForwardRequest) (*service.ForwardResponse, error) {
+			switch target {
+			case service.TargetAuth:
+				return &service.ForwardResponse{StatusCode: http.StatusOK, Body: []byte(`{"service":"auth"}`)}, nil
+			case service.TargetCatalog:
+				return &service.ForwardResponse{StatusCode: http.StatusOK, Body: []byte(`{"service":"catalog"}`)}, nil
+			case service.TargetUserAsset:
+				return &service.ForwardResponse{StatusCode: http.StatusOK, Body: []byte(`{"service":"user-asset"}`)}, nil
+			default:
+				t.Fatalf("unexpected target: %s", target)
+				return nil, nil
+			}
+		},
+	}), "test-secret")
+
+	userToken := signedTokenWithRole(t, "test-secret", "user")
+	adminToken := signedTokenWithRole(t, "test-secret", "admin")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/auth/users", nil)
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/admin/catalog/stats", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/admin/user-assets/price-alerts/send", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
 func TestRouterSmoke_UpstreamFailureMapsToBadGateway(t *testing.T) {
 	t.Parallel()
 
@@ -175,11 +233,19 @@ func TestRouterSmoke_UpstreamFailureMapsToBadGateway(t *testing.T) {
 }
 
 func signedToken(t *testing.T, secret string) string {
+	return signedTokenWithRole(t, secret, "")
+}
+
+func signedTokenWithRole(t *testing.T, secret, role string) string {
 	t.Helper()
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	claims := jwt.MapClaims{
 		"sub": "user_1",
-	})
+	}
+	if role != "" {
+		claims["role"] = role
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, err := token.SignedString([]byte(secret))
 	if err != nil {
 		t.Fatalf("sign token: %v", err)

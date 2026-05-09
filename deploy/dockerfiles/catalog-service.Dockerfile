@@ -3,6 +3,7 @@ FROM golang:1.23-alpine AS builder
 WORKDIR /src
 
 COPY shared/httpmiddleware ./shared/httpmiddleware
+COPY shared/catalogimport ./shared/catalogimport
 COPY services/catalog-service ./services/catalog-service
 
 WORKDIR /src/services/catalog-service

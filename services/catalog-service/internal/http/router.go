@@ -8,6 +8,10 @@ import (
 )
 
 func NewRouter(logger zerolog.Logger, h *handler.Handler) *gin.Engine {
+	return NewRouterWithSecurity(logger, h, "")
+}
+
+func NewRouterWithSecurity(logger zerolog.Logger, h *handler.Handler, jwtSecret string) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -15,7 +19,7 @@ func NewRouter(logger zerolog.Logger, h *handler.Handler) *gin.Engine {
 	r.Use(httpmiddleware.RequestLogger(logger))
 
 	r.GET("/health", h.Health)
-	registerServiceRoutes(r, h)
+	registerServiceRoutes(r, h, jwtSecret)
 
 	return r
 }

@@ -18,6 +18,7 @@ const (
 	HeaderInternalAuth = "X-Internal-Token"
 	ContextRequestID   = "request_id"
 	ContextJWTClaims   = "jwt_claims"
+	ClaimRole          = "role"
 )
 
 func RequestID() gin.HandlerFunc {
@@ -106,6 +107,30 @@ func RequireInternalToken(token string) gin.HandlerFunc {
 		}
 		if got != expected {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid internal token"})
+			return
+		}
+
+		c.Next()
+	}
+}
+
+func RequireRole(role string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		claimsValue, ok := c.Get(ContextJWTClaims)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "jwt claims are required"})
+			return
+		}
+
+		claims, ok := claimsValue.(jwt.MapClaims)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "invalid jwt claims"})
+			return
+		}
+
+		got, _ := claims[ClaimRole].(string)
+		if strings.TrimSpace(got) != strings.TrimSpace(role) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "insufficient role"})
 			return
 		}
 

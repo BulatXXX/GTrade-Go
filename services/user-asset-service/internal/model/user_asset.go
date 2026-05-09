@@ -66,3 +66,28 @@ type PreferencesResponse struct {
 	NotificationTime     string `json:"notification_time"`
 	UpdatedAt            string `json:"updated_at"`
 }
+
+type AdminManualPriceAlertRequest struct {
+	UserID int64 `json:"user_id,omitempty"`
+}
+
+type AdminManualPriceAlertResponse struct {
+	TargetUserID  int64 `json:"target_user_id,omitempty"`
+	UsersChecked  int   `json:"users_checked"`
+	EmailsSent    int   `json:"emails_sent"`
+	ChangesFound  int   `json:"changes_found"`
+	UsersWithDiff int   `json:"users_with_diff"`
+}
+
+type AdminSendMessageRequest struct {
+	UserID   int64  `json:"user_id,omitempty"`
+	Subject  string `json:"subject"`
+	HTMLBody string `json:"html_body"`
+	TextBody string `json:"text_body"`
+}
+
+type AdminSendMessageResponse struct {
+	TargetUserID int64 `json:"target_user_id,omitempty"`
+	UsersChecked int   `json:"users_checked"`
+	EmailsSent   int   `json:"emails_sent"`
+}

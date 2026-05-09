@@ -33,6 +33,7 @@ type TokenPairResponse struct {
 	RefreshToken string `json:"refresh_token"`
 	TokenType    string `json:"token_type"`
 	ExpiresIn    int64  `json:"expires_in"`
+	Role         string `json:"role,omitempty"`
 }
 
 type ActionStatusResponse struct {
@@ -51,4 +52,24 @@ type InternalUserEmailResponse struct {
 	UserID        int64  `json:"user_id"`
 	Email         string `json:"email"`
 	EmailVerified bool   `json:"email_verified"`
+}
+
+type InternalUserContactsResponse struct {
+	Users []InternalUserEmailResponse `json:"users"`
+}
+
+type UpdateUserRoleRequest struct {
+	Role string `json:"role"`
+}
+
+type AdminUserResponse struct {
+	ID            int64  `json:"id"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+	Role          string `json:"role"`
+	CreatedAt     string `json:"created_at"`
+}
+
+type AdminUsersResponse struct {
+	Users []AdminUserResponse `json:"users"`
 }

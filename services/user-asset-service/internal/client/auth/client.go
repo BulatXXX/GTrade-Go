@@ -19,6 +19,10 @@ type UserContact struct {
 	EmailVerified bool   `json:"email_verified"`
 }
 
+type UserContactsResponse struct {
+	Users []UserContact `json:"users"`
+}
+
 type Client struct {
 	baseURL       string
 	internalToken string
@@ -63,4 +67,35 @@ func (c *Client) GetUserContact(ctx context.Context, userID int64) (*UserContact
 		return nil, fmt.Errorf("decode auth user contact: %w", err)
 	}
 	return &out, nil
+}
+
+func (c *Client) ListUserContacts(ctx context.Context, verifiedOnly bool) ([]UserContact, error) {
+	path := c.baseURL + "/internal/users/contacts"
+	if verifiedOnly {
+		path += "?verified_only=true"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build auth contacts request: %w", err)
+	}
+	if c.internalToken != "" {
+		req.Header.Set("X-Internal-Token", c.internalToken)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("auth contacts request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("auth contacts unexpected status: %d", resp.StatusCode)
+	}
+
+	var out UserContactsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("decode auth contacts: %w", err)
+	}
+	return out.Users, nil
 }

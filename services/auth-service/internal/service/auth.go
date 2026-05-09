@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -24,10 +25,12 @@ type TokenPair struct {
 	AccessToken  string
 	RefreshToken string
 	ExpiresIn    int64
+	Role         string
 }
 
 type tokenClaims struct {
 	Type string `json:"type"`
+	Role string `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -35,6 +38,7 @@ type AuthService struct {
 	repo       *repository.AuthRepository
 	notifier   EmailNotifier
 	jwtSecret  []byte
+	admins     map[string]bool
 	accessTTL  time.Duration
 	refreshTTL time.Duration
 	resetTTL   time.Duration
@@ -45,17 +49,35 @@ type UserContact struct {
 	UserID        int64
 	Email         string
 	EmailVerified bool
+	Role          string
 }
 
-func NewAuthService(repo *repository.AuthRepository, jwtSecret string, notifier EmailNotifier) *AuthService {
+type UserSummary struct {
+	ID            int64
+	Email         string
+	EmailVerified bool
+	Role          string
+	CreatedAt     time.Time
+}
+
+func NewAuthService(repo *repository.AuthRepository, jwtSecret string, notifier EmailNotifier, adminEmails ...string) *AuthService {
 	if notifier == nil {
 		notifier = NoopEmailNotifier{}
+	}
+
+	adminSet := make(map[string]bool, len(adminEmails))
+	for _, email := range adminEmails {
+		email = strings.ToLower(strings.TrimSpace(email))
+		if email != "" {
+			adminSet[email] = true
+		}
 	}
 
 	return &AuthService{
 		repo:       repo,
 		notifier:   notifier,
 		jwtSecret:  []byte(jwtSecret),
+		admins:     adminSet,
 		accessTTL:  15 * time.Minute,
 		refreshTTL: 7 * 24 * time.Hour,
 		resetTTL:   time.Hour,
@@ -73,7 +95,12 @@ func (s *AuthService) Register(ctx context.Context, email, password string) (*To
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
-	user, err := s.repo.CreateUser(ctx, email, string(hash))
+	role := "user"
+	if s.admins[strings.ToLower(strings.TrimSpace(email))] {
+		role = "admin"
+	}
+
+	user, err := s.repo.CreateUser(ctx, email, string(hash), role)
 	if err != nil {
 		if errors.Is(err, repository.ErrEmailExists) {
 			return nil, repository.ErrEmailExists
@@ -277,6 +304,71 @@ func (s *AuthService) GetUserContact(ctx context.Context, userID int64) (*UserCo
 		UserID:        user.ID,
 		Email:         user.Email,
 		EmailVerified: user.EmailVerified,
+		Role:          user.Role,
+	}, nil
+}
+
+func (s *AuthService) ListUserContacts(ctx context.Context, verifiedOnly bool) ([]UserContact, error) {
+	users, err := s.repo.ListUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	contacts := make([]UserContact, 0, len(users))
+	for _, user := range users {
+		if verifiedOnly && !user.EmailVerified {
+			continue
+		}
+		contacts = append(contacts, UserContact{
+			UserID:        user.ID,
+			Email:         user.Email,
+			EmailVerified: user.EmailVerified,
+			Role:          user.Role,
+		})
+	}
+	return contacts, nil
+}
+
+func (s *AuthService) ListUsers(ctx context.Context) ([]UserSummary, error) {
+	users, err := s.repo.ListUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]UserSummary, 0, len(users))
+	for _, user := range users {
+		out = append(out, UserSummary{
+			ID:            user.ID,
+			Email:         user.Email,
+			EmailVerified: user.EmailVerified,
+			Role:          user.Role,
+			CreatedAt:     user.CreatedAt,
+		})
+	}
+	return out, nil
+}
+
+func (s *AuthService) UpdateUserRole(ctx context.Context, userID int64, role string) (*UserSummary, error) {
+	if userID <= 0 {
+		return nil, ErrUserNotFound
+	}
+	if role != "user" && role != "admin" {
+		return nil, fmt.Errorf("invalid role")
+	}
+
+	user, err := s.repo.UpdateUserRole(ctx, userID, role)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, ErrUserNotFound
+	}
+
+	return &UserSummary{
+		ID:            user.ID,
+		Email:         user.Email,
+		EmailVerified: user.EmailVerified,
+		Role:          user.Role,
+		CreatedAt:     user.CreatedAt,
 	}, nil
 }
 
@@ -286,8 +378,17 @@ func (s *AuthService) issueTokenPair(ctx context.Context, userID int64) (*TokenP
 	refreshExp := now.Add(s.refreshTTL)
 	subject := strconv.FormatInt(userID, 10)
 
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, ErrUserNotFound
+	}
+
 	accessClaims := tokenClaims{
 		Type: "access",
+		Role: user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   subject,
 			Issuer:    "auth-service",
@@ -299,6 +400,7 @@ func (s *AuthService) issueTokenPair(ctx context.Context, userID int64) (*TokenP
 
 	refreshClaims := tokenClaims{
 		Type: "refresh",
+		Role: user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   subject,
 			Issuer:    "auth-service",
@@ -323,7 +425,7 @@ func (s *AuthService) issueTokenPair(ctx context.Context, userID int64) (*TokenP
 		return nil, err
 	}
 
-	return &TokenPair{AccessToken: accessToken, RefreshToken: refreshToken, ExpiresIn: int64(s.accessTTL.Seconds())}, nil
+	return &TokenPair{AccessToken: accessToken, RefreshToken: refreshToken, ExpiresIn: int64(s.accessTTL.Seconds()), Role: user.Role}, nil
 }
 
 func (s *AuthService) parseToken(raw string) (*tokenClaims, error) {

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gtrade/services/auth-service/internal/model"
@@ -151,6 +153,7 @@ func (h *Handler) respondWithTokenPair(c *gin.Context, pair *service.TokenPair) 
 		RefreshToken: pair.RefreshToken,
 		TokenType:    "Bearer",
 		ExpiresIn:    pair.ExpiresIn,
+		Role:         pair.Role,
 	})
 }
 
@@ -176,5 +179,82 @@ func (h *Handler) GetInternalUserEmail(c *gin.Context) {
 		UserID:        contact.UserID,
 		Email:         contact.Email,
 		EmailVerified: contact.EmailVerified,
+	})
+}
+
+func (h *Handler) ListInternalUserContacts(c *gin.Context) {
+	verifiedOnly := strings.EqualFold(strings.TrimSpace(c.Query("verified_only")), "true")
+
+	users, err := h.authService.ListUserContacts(c.Request.Context(), verifiedOnly)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "list user contacts failed"})
+		return
+	}
+
+	resp := model.InternalUserContactsResponse{
+		Users: make([]model.InternalUserEmailResponse, 0, len(users)),
+	}
+	for _, user := range users {
+		resp.Users = append(resp.Users, model.InternalUserEmailResponse{
+			UserID:        user.UserID,
+			Email:         user.Email,
+			EmailVerified: user.EmailVerified,
+		})
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *Handler) ListUsers(c *gin.Context) {
+	users, err := h.authService.ListUsers(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "list users failed"})
+		return
+	}
+
+	resp := model.AdminUsersResponse{Users: make([]model.AdminUserResponse, 0, len(users))}
+	for _, user := range users {
+		resp.Users = append(resp.Users, model.AdminUserResponse{
+			ID:            user.ID,
+			Email:         user.Email,
+			EmailVerified: user.EmailVerified,
+			Role:          user.Role,
+			CreatedAt:     user.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *Handler) UpdateUserRole(c *gin.Context) {
+	userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || userID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	var req model.UpdateUserRoleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, err := h.authService.UpdateUserRole(c.Request.Context(), userID, req.Role)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrUserNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, model.AdminUserResponse{
+		ID:            user.ID,
+		Email:         user.Email,
+		EmailVerified: user.EmailVerified,
+		Role:          user.Role,
+		CreatedAt:     user.CreatedAt.Format(time.RFC3339),
 	})
 }

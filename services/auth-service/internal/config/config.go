@@ -14,6 +14,7 @@ type Config struct {
 	LogLevel               string
 	NotificationServiceURL string
 	InternalAPIToken       string
+	AdminEmails            string
 }
 
 func Load() (Config, error) {
@@ -30,6 +31,7 @@ func Load() (Config, error) {
 		LogLevel:               getEnv("LOG_LEVEL", "info"),
 		NotificationServiceURL: getEnv("NOTIFICATION_SERVICE_URL", "http://notification-service:8085"),
 		InternalAPIToken:       os.Getenv("INTERNAL_API_TOKEN"),
+		AdminEmails:            os.Getenv("ADMIN_EMAILS"),
 	}
 
 	return cfg, nil

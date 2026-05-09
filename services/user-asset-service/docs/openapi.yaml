@@ -302,6 +302,52 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /admin/price-alerts/send:
+    post:
+      summary: Send manual price alerts immediately
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminManualPriceAlertRequest'
+      responses:
+        '200':
+          description: Manual price alert dispatch completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminManualPriceAlertResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /admin/messages/send:
+    post:
+      summary: Send custom admin message through notification-service
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminSendMessageRequest'
+      responses:
+        '200':
+          description: Admin message dispatch completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSendMessageResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   schemas:
     HealthResponse:
@@ -387,6 +433,66 @@ components:
         notify_enabled:
           type: boolean
           example: true
+    AdminManualPriceAlertRequest:
+      type: object
+      properties:
+        user_id:
+          type: integer
+          format: int64
+          example: 42
+      description: If omitted, the service checks every subscribed watchlist user and sends only detected price changes.
+    AdminManualPriceAlertResponse:
+      type: object
+      required: [users_checked, emails_sent, changes_found, users_with_diff]
+      properties:
+        target_user_id:
+          type: integer
+          format: int64
+          example: 42
+        users_checked:
+          type: integer
+          example: 15
+        emails_sent:
+          type: integer
+          example: 6
+        changes_found:
+          type: integer
+          example: 24
+        users_with_diff:
+          type: integer
+          example: 6
+    AdminSendMessageRequest:
+      type: object
+      required: [subject]
+      properties:
+        user_id:
+          type: integer
+          format: int64
+          example: 42
+        subject:
+          type: string
+          example: GTrade maintenance
+        html_body:
+          type: string
+          example: "<p>Maintenance starts at 22:00 UTC</p>"
+        text_body:
+          type: string
+          example: Maintenance starts at 22:00 UTC
+      description: If `user_id` is omitted, the message is sent to all verified users.
+    AdminSendMessageResponse:
+      type: object
+      required: [users_checked, emails_sent]
+      properties:
+        target_user_id:
+          type: integer
+          format: int64
+          example: 42
+        users_checked:
+          type: integer
+          example: 125
+        emails_sent:
+          type: integer
+          example: 125
     UserProfileResponse:
       type: object
       required: [user_id, display_name, avatar_url, bio, created_at, updated_at]

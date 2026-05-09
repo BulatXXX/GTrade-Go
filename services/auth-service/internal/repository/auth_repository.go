@@ -18,6 +18,15 @@ type User struct {
 	Email         string
 	PasswordHash  string
 	EmailVerified bool
+	Role          string
+	CreatedAt     time.Time
+}
+
+type UserListItem struct {
+	ID            int64
+	Email         string
+	EmailVerified bool
+	Role          string
 	CreatedAt     time.Time
 }
 
@@ -47,15 +56,15 @@ func NewAuthRepository(pool *pgxpool.Pool) *AuthRepository {
 	return &AuthRepository{pool: pool}
 }
 
-func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash string) (*User, error) {
+func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash, role string) (*User, error) {
 	query := `
-		INSERT INTO users (email, password_hash)
-		VALUES ($1, $2)
-		RETURNING id, email, password_hash, email_verified, created_at
+		INSERT INTO users (email, password_hash, role)
+		VALUES ($1, $2, $3)
+		RETURNING id, email, password_hash, email_verified, role, created_at
 	`
 
 	var user User
-	if err := r.pool.QueryRow(ctx, query, email, passwordHash).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.EmailVerified, &user.CreatedAt); err != nil {
+	if err := r.pool.QueryRow(ctx, query, email, passwordHash, normalizeRole(role)).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.EmailVerified, &user.Role, &user.CreatedAt); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return nil, ErrEmailExists
@@ -67,10 +76,10 @@ func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash str
 }
 
 func (r *AuthRepository) GetUserByEmail(ctx context.Context, email string) (*User, error) {
-	query := `SELECT id, email, password_hash, email_verified, created_at FROM users WHERE email = $1`
+	query := `SELECT id, email, password_hash, email_verified, role, created_at FROM users WHERE email = $1`
 
 	var user User
-	if err := r.pool.QueryRow(ctx, query, email).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.EmailVerified, &user.CreatedAt); err != nil {
+	if err := r.pool.QueryRow(ctx, query, email).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.EmailVerified, &user.Role, &user.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
@@ -81,16 +90,59 @@ func (r *AuthRepository) GetUserByEmail(ctx context.Context, email string) (*Use
 }
 
 func (r *AuthRepository) GetUserByID(ctx context.Context, userID int64) (*User, error) {
-	query := `SELECT id, email, password_hash, email_verified, created_at FROM users WHERE id = $1`
+	query := `SELECT id, email, password_hash, email_verified, role, created_at FROM users WHERE id = $1`
 
 	var user User
-	if err := r.pool.QueryRow(ctx, query, userID).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.EmailVerified, &user.CreatedAt); err != nil {
+	if err := r.pool.QueryRow(ctx, query, userID).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.EmailVerified, &user.Role, &user.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("get user by id: %w", err)
 	}
 
+	return &user, nil
+}
+
+func (r *AuthRepository) ListUsers(ctx context.Context) ([]UserListItem, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, email, email_verified, role, created_at
+		FROM users
+		ORDER BY created_at DESC, id DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []UserListItem
+	for rows.Next() {
+		var user UserListItem
+		if err := rows.Scan(&user.ID, &user.Email, &user.EmailVerified, &user.Role, &user.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan users row: %w", err)
+		}
+		users = append(users, user)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("users rows: %w", err)
+	}
+
+	return users, nil
+}
+
+func (r *AuthRepository) UpdateUserRole(ctx context.Context, userID int64, role string) (*User, error) {
+	var user User
+	err := r.pool.QueryRow(ctx, `
+		UPDATE users
+		SET role = $2
+		WHERE id = $1
+		RETURNING id, email, password_hash, email_verified, role, created_at
+	`, userID, normalizeRole(role)).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.EmailVerified, &user.Role, &user.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("update user role: %w", err)
+	}
 	return &user, nil
 }
 
@@ -204,4 +256,11 @@ func scanOneTimeToken(ctx context.Context, pool *pgxpool.Pool, query, token stri
 		return nil, fmt.Errorf("get one-time token: %w", err)
 	}
 	return &ot, nil
+}
+
+func normalizeRole(role string) string {
+	if role == "admin" {
+		return "admin"
+	}
+	return "user"
 }

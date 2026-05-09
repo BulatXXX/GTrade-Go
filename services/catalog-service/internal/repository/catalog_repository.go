@@ -431,6 +431,81 @@ func (r *CatalogRepository) GetPriceHistory(ctx context.Context, itemID string, 
 	return history, nil
 }
 
+func (r *CatalogRepository) CountItems(ctx context.Context) (int, error) {
+	return r.count(ctx, `SELECT COUNT(*) FROM items`)
+}
+
+func (r *CatalogRepository) CountActiveItems(ctx context.Context) (int, error) {
+	return r.count(ctx, `SELECT COUNT(*) FROM items WHERE is_active = TRUE`)
+}
+
+func (r *CatalogRepository) CountPriceHistoryRows(ctx context.Context) (int, error) {
+	return r.count(ctx, `SELECT COUNT(*) FROM prices`)
+}
+
+func (r *CatalogRepository) CountLocalizationCoverage(ctx context.Context, game string) ([]model.LocalizationCoverageRow, error) {
+	rows, err := r.pool.Query(ctx, `
+		WITH totals AS (
+			SELECT game, COUNT(*) AS total_items
+			FROM items
+			WHERE ($1 = '' OR game = $1)
+			GROUP BY game
+		),
+		coverage AS (
+			SELECT
+				i.game,
+				t.language_code,
+				COUNT(*) AS translated_items,
+				COUNT(*) FILTER (WHERE NULLIF(BTRIM(COALESCE(t.description, '')), '') IS NOT NULL) AS description_filled_items
+			FROM items i
+			JOIN item_translations t ON t.item_id = i.id
+			WHERE ($1 = '' OR i.game = $1)
+			GROUP BY i.game, t.language_code
+		)
+		SELECT
+			c.game,
+			c.language_code,
+			t.total_items,
+			c.translated_items,
+			GREATEST(t.total_items - c.translated_items, 0) AS missing_items,
+			c.description_filled_items
+		FROM coverage c
+		JOIN totals t ON t.game = c.game
+		ORDER BY c.game ASC, c.language_code ASC
+	`, strings.TrimSpace(game))
+	if err != nil {
+		return nil, fmt.Errorf("count localization coverage: %w", err)
+	}
+	defer rows.Close()
+
+	coverage := make([]model.LocalizationCoverageRow, 0)
+	for rows.Next() {
+		var row model.LocalizationCoverageRow
+		if err := rows.Scan(
+			&row.Game,
+			&row.LanguageCode,
+			&row.TotalItems,
+			&row.TranslatedItems,
+			&row.MissingItems,
+			&row.DescriptionFilledItems,
+		); err != nil {
+			return nil, fmt.Errorf("scan localization coverage row: %w", err)
+		}
+
+		if row.TotalItems > 0 {
+			row.CoveragePercent = float64(row.TranslatedItems) * 100 / float64(row.TotalItems)
+			row.DescriptionCoveragePercent = float64(row.DescriptionFilledItems) * 100 / float64(row.TotalItems)
+		}
+
+		coverage = append(coverage, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("localization coverage rows: %w", err)
+	}
+
+	return coverage, nil
+}
+
 func (r *CatalogRepository) getItem(ctx context.Context, q queryRower, query string, args ...any) (*model.Item, error) {
 	var item model.Item
 	if err := scanItem(q.QueryRow(ctx, query, args...), &item); err != nil {
@@ -574,6 +649,14 @@ func stringValue(value *string) string {
 		return ""
 	}
 	return *value
+}
+
+func (r *CatalogRepository) count(ctx context.Context, query string, args ...any) (int, error) {
+	var count int
+	if err := r.pool.QueryRow(ctx, query, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count query: %w", err)
+	}
+	return count, nil
 }
 
 type queryRower interface {

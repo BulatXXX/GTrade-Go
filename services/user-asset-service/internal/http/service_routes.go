@@ -19,4 +19,8 @@ func registerServiceRoutes(r *gin.Engine, h *handler.Handler) {
 
 	r.GET("/preferences", h.GetPreferences)
 	r.PUT("/preferences", h.UpdatePreferences)
+
+	adminGroup := r.Group("/admin")
+	adminGroup.POST("/price-alerts/send", h.SendManualPriceAlerts)
+	adminGroup.POST("/messages/send", h.SendAdminMessage)
 }

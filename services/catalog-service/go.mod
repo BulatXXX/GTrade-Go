@@ -6,8 +6,11 @@ require (
 	github.com/gin-gonic/gin v1.10.1
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/rs/zerolog v1.34.0
+	github.com/singularity/gtrade/shared/catalogimport v0.0.0
 	github.com/singularity/gtrade/shared/httpmiddleware v0.0.0
 )
+
+replace github.com/singularity/gtrade/shared/catalogimport => ../../shared/catalogimport
 
 replace github.com/singularity/gtrade/shared/httpmiddleware => ../../shared/httpmiddleware
 

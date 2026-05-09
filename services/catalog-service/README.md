@@ -36,6 +36,8 @@
 - `DELETE /items/:id` по умолчанию работает как soft delete через `is_active=false`
 - sync через `api-integration-service` обновляет базовую metadata и не должен сносить существующие переводы, если новые `translations` не переданы
 - history цен обновляется фоновым collector'ом внутри сервиса через `api-integration-service`
+- admin может запускать `catalog import` как background job с прогрессом и параметрами `game` + `language`
+- admin может смотреть покрытие локализаций по игре и языку
 
 ## Как пользоваться history prices
 
@@ -43,6 +45,17 @@
 - затем запросить историю: `GET /items/:id/prices/history?limit=30`
 - для `tarkov` можно уточнить режим: `GET /items/:id/prices/history?game_mode=pve&limit=30`
 - через gateway используется тот же путь с префиксом `/api/items/...`
+
+## Admin import и localization coverage
+
+- запуск импорта каталога: `POST /admin/jobs/catalog-import`
+- тело запроса: `{"game":"warframe","language":"ru","limit":250}`
+- поддержанные `game`: `warframe`, `eve`, `tarkov`
+- `language` задает, какую локализацию подтянуть поверх базового `en`
+- `limit=0` означает полный импорт по источнику
+- статус и прогресс job читаются через `GET /admin/jobs` и `GET /admin/jobs/:id`
+- `meta` в job response показывает, какой именно `game/language/limit` сейчас обрабатывается
+- покрытие локализаций читается через `GET /admin/localizations/coverage?game=warframe`
 
 ## Следующий логичный шаг
 

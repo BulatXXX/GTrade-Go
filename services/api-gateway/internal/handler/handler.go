@@ -35,6 +35,18 @@ func (h *Handler) ProxyCatalog(c *gin.Context) {
 	h.proxyTo(c, service.TargetCatalog, fallbackPath("/items", wildcardPath(c)))
 }
 
+func (h *Handler) ProxyCatalogAdmin(c *gin.Context) {
+	h.proxyTo(c, service.TargetCatalog, fallbackPath("/admin", wildcardPath(c)))
+}
+
+func (h *Handler) ProxyAuthAdmin(c *gin.Context) {
+	h.proxyTo(c, service.TargetAuth, fallbackPath("/admin", wildcardPath(c)))
+}
+
+func (h *Handler) ProxyUsersAdmin(c *gin.Context) {
+	h.proxyTo(c, service.TargetUserAsset, fallbackPath("/admin", wildcardPath(c)))
+}
+
 func (h *Handler) ProxyMarket(c *gin.Context) {
 	h.proxyTo(c, service.TargetIntegration, wildcardPath(c))
 }

@@ -42,7 +42,7 @@ func Run(ctx context.Context) error {
 	authClient := authclient.New(cfg.AuthServiceURL, cfg.InternalAPIToken)
 	notificationClient := notificationclient.New(cfg.NotificationServiceURL)
 	priceAlertService := service.NewPriceAlertService(repo, catalogClient, authClient, notificationClient)
-	h := handler.New(cfg.ServiceName, userAssetService)
+	h := handler.New(cfg.ServiceName, service.NewHandlerFacade(userAssetService, priceAlertService))
 	r := httpserver.NewRouter(logger, h)
 
 	alertInterval, err := time.ParseDuration(cfg.PriceAlertCheckInterval)
