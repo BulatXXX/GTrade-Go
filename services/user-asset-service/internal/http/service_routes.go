@@ -23,4 +23,5 @@ func registerServiceRoutes(r *gin.Engine, h *handler.Handler) {
 	adminGroup := r.Group("/admin")
 	adminGroup.POST("/price-alerts/send", h.SendManualPriceAlerts)
 	adminGroup.POST("/messages/send", h.SendAdminMessage)
+	adminGroup.GET("/scheduler-state", h.ListSchedulerStates)
 }

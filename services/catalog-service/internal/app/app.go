@@ -45,12 +45,13 @@ func Run(ctx context.Context) error {
 	}
 
 	integrationClient := integration.New(cfg.IntegrationServiceURL)
-	priceCollector := scheduler.NewPriceHistoryCollector(logger, svc, integrationClient, refreshInterval)
+	priceHistoryLockKey := repository.SchedulerLockKey(scheduler.PriceHistoryJobName)
+	priceCollector := scheduler.NewPriceHistoryCollector(logger, svc, integrationClient, repo, priceHistoryLockKey, refreshInterval)
 	priceCollector.Start(ctx)
 	jobManager := adminjobs.NewManager()
 	priceHistoryRunner := adminjobs.NewPriceHistorySyncRunner(jobManager, priceCollector)
-	catalogImportRunner := adminjobs.NewCatalogImportRunner(jobManager, svc)
-	adminRunner := adminjobs.NewCompositeRunner(priceHistoryRunner, catalogImportRunner)
+	catalogImportRunner := adminjobs.NewCatalogImportRunner(jobManager, svc, repo, repository.SchedulerLockKey)
+	adminRunner := adminjobs.NewCompositeRunner(priceHistoryRunner, catalogImportRunner, repo)
 	h := handler.New(cfg.ServiceName, svc, adminRunner)
 	r := httpserver.NewRouterWithSecurity(logger, h, cfg.JWTSecret)
 

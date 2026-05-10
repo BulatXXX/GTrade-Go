@@ -238,9 +238,18 @@ func (h *Handler) SendManualPriceAlerts(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.userAssetService.SendManualPriceAlerts(c.Request.Context(), req.UserID)
+	resp, err := h.userAssetService.SendManualPriceAlerts(c.Request.Context(), req.UserID, req.ForceSend)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *Handler) ListSchedulerStates(c *gin.Context) {
+	resp, err := h.userAssetService.ListSchedulerStates(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, resp)

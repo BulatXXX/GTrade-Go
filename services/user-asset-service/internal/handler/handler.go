@@ -25,8 +25,9 @@ type UserAssetUseCase interface {
 	GetPreferences(ctx context.Context, userID int64) (*repository.UserPreferences, error)
 	UpdatePreferences(ctx context.Context, userID int64, currency string, notificationsEnabled bool, notificationMode, notificationTime string) (*repository.UserPreferences, error)
 	GetCatalogItem(ctx context.Context, itemID string) (*catalog.Item, error)
-	SendManualPriceAlerts(ctx context.Context, userID int64) (*model.AdminManualPriceAlertResponse, error)
+	SendManualPriceAlerts(ctx context.Context, userID int64, forceSend bool) (*model.AdminManualPriceAlertResponse, error)
 	SendAdminMessage(ctx context.Context, userID int64, subject, htmlBody, textBody string) (*model.AdminSendMessageResponse, error)
+	ListSchedulerStates(ctx context.Context) (*model.SchedulerStateResponse, error)
 }
 
 func New(serviceName string, userAssetService UserAssetUseCase) *Handler {

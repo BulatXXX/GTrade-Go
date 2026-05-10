@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog"
 	authclient "gtrade/services/user-asset-service/internal/client/auth"
 	"gtrade/services/user-asset-service/internal/client/catalog"
 	notificationclient "gtrade/services/user-asset-service/internal/client/notification"
@@ -38,13 +39,6 @@ type notificationEmailClient interface {
 	SendEmail(ctx context.Context, input notificationclient.SendEmailRequest) error
 }
 
-type PriceAlertService struct {
-	repo         priceAlertRepository
-	catalog      catalogPriceClient
-	auth         authContactClient
-	notification notificationEmailClient
-}
-
 type PriceAlertChange struct {
 	ItemID         string
 	ItemName       string
@@ -69,10 +63,12 @@ type pendingUserNotification struct {
 
 type ManualDispatchResult struct {
 	TargetUserID  int64
+	Mode          string
 	UsersChecked  int
 	EmailsSent    int
 	ChangesFound  int
 	UsersWithDiff int
+	UsersSkipped  int
 }
 
 type AdminMessageResult struct {
@@ -81,12 +77,21 @@ type AdminMessageResult struct {
 	EmailsSent   int
 }
 
-func NewPriceAlertService(repo priceAlertRepository, catalogClient catalogPriceClient, authClient authContactClient, notificationClient notificationEmailClient) *PriceAlertService {
+type PriceAlertService struct {
+	repo         priceAlertRepository
+	catalog      catalogPriceClient
+	auth         authContactClient
+	notification notificationEmailClient
+	logger       zerolog.Logger
+}
+
+func NewPriceAlertService(logger zerolog.Logger, repo priceAlertRepository, catalogClient catalogPriceClient, authClient authContactClient, notificationClient notificationEmailClient) *PriceAlertService {
 	return &PriceAlertService{
 		repo:         repo,
 		catalog:      catalogClient,
 		auth:         authClient,
 		notification: notificationClient,
+		logger:       logger.With().Str("component", "price_alert").Logger(),
 	}
 }
 
@@ -188,9 +193,12 @@ func (s *PriceAlertService) RunCycle(ctx context.Context, now time.Time) error {
 	return nil
 }
 
-func (s *PriceAlertService) SendManualPriceAlerts(ctx context.Context, userID int64, now time.Time) (*ManualDispatchResult, error) {
+func (s *PriceAlertService) SendManualPriceAlerts(ctx context.Context, userID int64, forceSend bool, now time.Time) (*ManualDispatchResult, error) {
 	if s == nil || s.repo == nil || s.catalog == nil || s.auth == nil || s.notification == nil {
 		return &ManualDispatchResult{TargetUserID: userID}, nil
+	}
+	if forceSend {
+		return s.sendForcedSnapshot(ctx, userID, now)
 	}
 
 	subscriptions, err := s.repo.ListNotificationSubscriptions(ctx)
@@ -248,6 +256,7 @@ func (s *PriceAlertService) SendManualPriceAlerts(ctx context.Context, userID in
 
 	result := &ManualDispatchResult{
 		TargetUserID: userID,
+		Mode:         "diff",
 		UsersChecked: len(checkedUsers),
 	}
 
@@ -262,6 +271,97 @@ func (s *PriceAlertService) SendManualPriceAlerts(ctx context.Context, userID in
 		}
 		if sent {
 			result.EmailsSent++
+		} else {
+			result.UsersSkipped++
+		}
+	}
+
+	return result, nil
+}
+
+// sendForcedSnapshot ignores detectPriceAlertChanges and sends every
+// subscribed user a one-shot snapshot of their current watchlist values. The
+// notification state is NOT updated, so the next regular cycle still behaves
+// as if no manual send happened.
+func (s *PriceAlertService) sendForcedSnapshot(ctx context.Context, userID int64, now time.Time) (*ManualDispatchResult, error) {
+	subscriptions, err := s.repo.ListNotificationSubscriptions(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list notification subscriptions: %w", err)
+	}
+
+	pendingByUser := map[int64]*pendingUserNotification{}
+	checkedUsers := map[int64]bool{}
+
+	for _, sub := range subscriptions {
+		if userID > 0 && sub.UserID != userID {
+			continue
+		}
+		if !sub.NotificationsEnabled {
+			continue
+		}
+		checkedUsers[sub.UserID] = true
+
+		item, err := s.catalog.GetItem(ctx, sub.ItemID)
+		if err != nil || item == nil || !item.IsActive {
+			s.logger.Debug().
+				Int64("user_id", sub.UserID).
+				Str("item_id", sub.ItemID).
+				Msg("force_send: item missing or inactive, skipping line")
+			continue
+		}
+
+		historyResp, err := s.catalog.GetPriceHistory(ctx, sub.ItemID, "", 1)
+		if err != nil || historyResp == nil || len(historyResp.History) == 0 {
+			s.logger.Debug().
+				Int64("user_id", sub.UserID).
+				Str("item_id", sub.ItemID).
+				Msg("force_send: no price history available, skipping line")
+			continue
+		}
+
+		latest := historyResp.History[0]
+		change := PriceAlertChange{
+			ItemID:         item.ID,
+			ItemName:       item.Name,
+			ImageURL:       item.ImageURL,
+			Game:           item.Game,
+			Source:         latest.Source,
+			GameMode:       latest.GameMode,
+			Currency:       latest.Currency,
+			CurrentValue:   latest.Value,
+			PreviousValue:  latest.Value,
+			CollectedOn:    latest.CollectedOn,
+			CollectedAt:    latest.CollectedAt,
+			AbsoluteChange: 0,
+		}
+
+		pending := pendingByUser[sub.UserID]
+		if pending == nil {
+			pending = &pendingUserNotification{mode: "snapshot", userID: sub.UserID}
+			pendingByUser[sub.UserID] = pending
+		}
+		pending.changes = append(pending.changes, change)
+	}
+
+	result := &ManualDispatchResult{
+		TargetUserID: userID,
+		Mode:         "snapshot",
+		UsersChecked: len(checkedUsers),
+	}
+
+	for _, pending := range pendingByUser {
+		result.ChangesFound += len(pending.changes)
+		if len(pending.changes) > 0 {
+			result.UsersWithDiff++
+		}
+		sent, err := s.dispatchUserNotification(ctx, pending, now, false)
+		if err != nil {
+			return nil, err
+		}
+		if sent {
+			result.EmailsSent++
+		} else {
+			result.UsersSkipped++
 		}
 	}
 
@@ -357,6 +457,25 @@ func (s *PriceAlertService) dispatchUserNotification(ctx context.Context, pendin
 
 	contact, err := s.auth.GetUserContact(ctx, pending.userID)
 	if err != nil || contact == nil || strings.TrimSpace(contact.Email) == "" || !contact.EmailVerified {
+		reason := "contact_unknown"
+		switch {
+		case err != nil:
+			reason = "auth_error"
+		case contact == nil:
+			reason = "contact_nil"
+		case strings.TrimSpace(contact.Email) == "":
+			reason = "email_empty"
+		case !contact.EmailVerified:
+			reason = "email_not_verified"
+		}
+		s.logger.Info().
+			Int64("user_id", pending.userID).
+			Str("mode", pending.mode).
+			Int("changes", len(pending.changes)).
+			Str("skip_reason", reason).
+			Err(err).
+			Msg("price alert dispatch skipped")
+
 		for _, state := range pending.stateUpdates {
 			if upsertErr := s.repo.UpsertWatchlistNotificationState(ctx, withoutSentAt(state)); upsertErr != nil {
 				return false, fmt.Errorf("advance state without email: %w", upsertErr)
@@ -510,6 +629,10 @@ func groupPriceHistory(history []catalog.PriceHistoryEntry) [][]catalog.PriceHis
 }
 
 func renderPriceAlertEmail(mode string, changes []PriceAlertChange, now time.Time) (string, string, string, error) {
+	if mode == "snapshot" {
+		return renderSnapshotEmail(changes, now)
+	}
+
 	subject := "Price changes in your GTrade watchlist"
 	title := "Immediate watchlist update"
 	if mode == "daily_digest" {
@@ -555,6 +678,54 @@ func renderPriceAlertEmail(mode string, changes []PriceAlertChange, now time.Tim
 	}
 
 	tpl := template.Must(template.New("price-alert-email").Parse(priceAlertEmailTemplate))
+	var html bytes.Buffer
+	if err := tpl.Execute(&html, view); err != nil {
+		return "", "", "", err
+	}
+
+	return html.String(), text.String(), subject, nil
+}
+
+func renderSnapshotEmail(changes []PriceAlertChange, now time.Time) (string, string, string, error) {
+	subject := "Your GTrade watchlist snapshot"
+	title := "Watchlist snapshot"
+
+	view := struct {
+		Title string
+		Date  string
+		Items []map[string]string
+	}{
+		Title: title,
+		Date:  now.UTC().Format("2006-01-02 15:04 UTC"),
+	}
+
+	var text strings.Builder
+	text.WriteString(title + "\n")
+	text.WriteString("Generated at: " + view.Date + "\n\n")
+
+	for _, change := range changes {
+		modeLabel := change.GameMode
+		if modeLabel == "" {
+			modeLabel = "default"
+		}
+		view.Items = append(view.Items, map[string]string{
+			"image_url":     change.ImageURL,
+			"name":          change.ItemName,
+			"game":          strings.ToUpper(change.Game),
+			"source":        change.Source,
+			"game_mode":     modeLabel,
+			"current_value": formatPrice(change.CurrentValue, change.Currency),
+			"collected_on":  change.CollectedOn,
+		})
+
+		text.WriteString("- " + change.ItemName + " [" + strings.ToUpper(change.Game) + "]")
+		if change.GameMode != "" {
+			text.WriteString(" (" + change.GameMode + ")")
+		}
+		text.WriteString(": " + formatPrice(change.CurrentValue, change.Currency) + " on " + change.CollectedOn + "\n")
+	}
+
+	tpl := template.Must(template.New("watchlist-snapshot-email").Parse(watchlistSnapshotEmailTemplate))
 	var html bytes.Buffer
 	if err := tpl.Execute(&html, view); err != nil {
 		return "", "", "", err
@@ -648,6 +819,45 @@ const priceAlertEmailTemplate = `
             <div><strong>Current:</strong> {{ .current_value }}</div>
             <div><strong>Previous:</strong> {{ .previous_value }}</div>
             <div><strong>Change:</strong> {{ .delta }}</div>
+            <div><strong>Day:</strong> {{ .collected_on }}</div>
+          </div>
+        </div>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</body>
+</html>
+`
+
+const watchlistSnapshotEmailTemplate = `
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ .Title }}</title>
+</head>
+<body style="margin:0;padding:24px;background:#f4efe8;font-family:Georgia,'Times New Roman',serif;color:#1f2933;">
+  <div style="max-width:760px;margin:0 auto;background:#fffdf8;border:1px solid #e8dcc9;border-radius:20px;overflow:hidden;">
+    <div style="padding:32px 36px;background:linear-gradient(135deg,#112d32,#8f5f3f);color:#fff7ec;">
+      <div style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;opacity:0.82;">GTrade Watchlist</div>
+      <h1 style="margin:12px 0 8px;font-size:30px;line-height:1.1;">{{ .Title }}</h1>
+      <p style="margin:0;font-size:14px;opacity:0.92;">Generated at {{ .Date }}</p>
+    </div>
+    <div style="padding:24px;">
+      {{ range .Items }}
+      <div style="display:flex;gap:18px;padding:18px 0;border-bottom:1px solid #efe5d6;">
+        <div style="width:96px;min-width:96px;height:96px;border-radius:16px;background:#f0e4d3;overflow:hidden;">
+          {{ if .image_url }}
+          <img src="{{ .image_url }}" alt="{{ .name }}" style="width:96px;height:96px;object-fit:cover;display:block;">
+          {{ end }}
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#8b6b4b;">{{ .game }} • {{ .source }} • {{ .game_mode }}</div>
+          <div style="margin:6px 0 8px;font-size:22px;font-weight:700;color:#1c2733;">{{ .name }}</div>
+          <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:14px;color:#3c4b5a;">
+            <div><strong>Current price:</strong> {{ .current_value }}</div>
             <div><strong>Day:</strong> {{ .collected_on }}</div>
           </div>
         </div>

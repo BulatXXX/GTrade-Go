@@ -25,4 +25,5 @@ func registerServiceRoutes(r *gin.Engine, h *handler.Handler, jwtSecret string) 
 	adminGroup.POST("/jobs/price-history-sync", h.StartPriceHistorySync)
 	adminGroup.GET("/jobs", h.ListAdminJobs)
 	adminGroup.GET("/jobs/:id", h.GetAdminJob)
+	adminGroup.GET("/scheduler-state", h.ListSchedulerStates)
 }

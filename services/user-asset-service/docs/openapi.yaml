@@ -348,6 +348,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /admin/scheduler-state:
+    get:
+      summary: List background scheduler jobs and their last execution state
+      tags: [admin]
+      responses:
+        '200':
+          description: Scheduler state snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulerStateResponse'
 components:
   schemas:
     HealthResponse:
@@ -440,15 +451,32 @@ components:
           type: integer
           format: int64
           example: 42
+        force_send:
+          type: boolean
+          example: false
+          description: |
+            If `true`, ignore the diff-detection state and send each subscribed
+            user a one-shot snapshot of their current watchlist values. The
+            internal `watchlist_notification_state` rows are NOT touched, so
+            the next regular dispatch still behaves as if no manual send
+            happened. Use this for "resend last known prices" admin actions.
       description: If omitted, the service checks every subscribed watchlist user and sends only detected price changes.
     AdminManualPriceAlertResponse:
       type: object
-      required: [users_checked, emails_sent, changes_found, users_with_diff]
+      required: [mode, users_checked, emails_sent, changes_found, users_with_diff, users_skipped]
       properties:
         target_user_id:
           type: integer
           format: int64
           example: 42
+        mode:
+          type: string
+          enum: [diff, snapshot]
+          example: diff
+          description: |
+            `diff` — regular detect+send flow, only price changes are emailed.
+            `snapshot` — force_send flow, every subscribed line is included
+            with delta=0 (Subject "Your GTrade watchlist snapshot").
         users_checked:
           type: integer
           example: 15
@@ -461,6 +489,58 @@ components:
         users_with_diff:
           type: integer
           example: 6
+        users_skipped:
+          type: integer
+          example: 1
+          description: |
+            Users that were eligible (had matching subscriptions/changes) but
+            email was not delivered. Reason is recorded in service logs as
+            `skip_reason` (`auth_error`, `contact_nil`, `email_empty`,
+            `email_not_verified`).
+    SchedulerStateResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchedulerStateItem'
+    SchedulerStateItem:
+      type: object
+      required: [job_name, status, last_processed, last_total, runs_total, updated_at]
+      properties:
+        job_name:
+          type: string
+          example: price_alert_dispatch
+        status:
+          type: string
+          enum: [idle, running, ok, error]
+          example: ok
+        last_started_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+          example: "send price alert email: smtp timeout"
+        last_processed:
+          type: integer
+          example: 0
+        last_total:
+          type: integer
+          example: 0
+        runs_total:
+          type: integer
+          format: int64
+          example: 1234
+        updated_at:
+          type: string
+          format: date-time
     AdminSendMessageRequest:
       type: object
       required: [subject]

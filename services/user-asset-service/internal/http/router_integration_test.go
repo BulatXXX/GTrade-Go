@@ -61,7 +61,7 @@ func TestRouterIntegration_WatchlistIsValidatedAndEnrichedByCatalog(t *testing.T
 		},
 	}
 	svc := service.NewUserAssetService(repo, catalogClient)
-	router := NewRouter(zerolog.Nop(), handler.New("user-asset-service", service.NewHandlerFacade(svc, nil)))
+	router := NewRouter(zerolog.Nop(), handler.New("user-asset-service", service.NewHandlerFacade(svc, nil, nil)))
 
 	createUserReq := newIntegrationJSONRequest(t, http.MethodPost, "/users", map[string]any{
 		"user_id":      101,
@@ -134,7 +134,7 @@ func TestRouterIntegration_RejectsMissingCatalogItem(t *testing.T) {
 
 	repo := repository.NewUserAssetRepository(pool)
 	svc := service.NewUserAssetService(repo, fakeCatalogClient{items: map[string]*catalog.Item{}})
-	router := NewRouter(zerolog.Nop(), handler.New("user-asset-service", service.NewHandlerFacade(svc, nil)))
+	router := NewRouter(zerolog.Nop(), handler.New("user-asset-service", service.NewHandlerFacade(svc, nil, nil)))
 
 	createUserReq := newIntegrationJSONRequest(t, http.MethodPost, "/users", map[string]any{
 		"user_id":      202,

@@ -29,8 +29,9 @@ type stubUserAssetService struct {
 	getPreferencesFn              func(ctx context.Context, userID int64) (*repository.UserPreferences, error)
 	updatePreferencesFn           func(ctx context.Context, userID int64, currency string, notificationsEnabled bool, notificationMode, notificationTime string) (*repository.UserPreferences, error)
 	getCatalogItemFn              func(ctx context.Context, itemID string) (*catalog.Item, error)
-	sendManualPriceAlertsFn       func(ctx context.Context, userID int64) (*model.AdminManualPriceAlertResponse, error)
+	sendManualPriceAlertsFn       func(ctx context.Context, userID int64, forceSend bool) (*model.AdminManualPriceAlertResponse, error)
 	sendAdminMessageFn            func(ctx context.Context, userID int64, subject, htmlBody, textBody string) (*model.AdminSendMessageResponse, error)
+	listSchedulerStatesFn         func(ctx context.Context) (*model.SchedulerStateResponse, error)
 }
 
 func (s stubUserAssetService) CreateUser(ctx context.Context, userID int64, displayName, avatarURL, bio string) (*repository.UserProfile, error) {
@@ -66,11 +67,17 @@ func (s stubUserAssetService) UpdatePreferences(ctx context.Context, userID int6
 func (s stubUserAssetService) GetCatalogItem(ctx context.Context, itemID string) (*catalog.Item, error) {
 	return s.getCatalogItemFn(ctx, itemID)
 }
-func (s stubUserAssetService) SendManualPriceAlerts(ctx context.Context, userID int64) (*model.AdminManualPriceAlertResponse, error) {
-	return s.sendManualPriceAlertsFn(ctx, userID)
+func (s stubUserAssetService) SendManualPriceAlerts(ctx context.Context, userID int64, forceSend bool) (*model.AdminManualPriceAlertResponse, error) {
+	return s.sendManualPriceAlertsFn(ctx, userID, forceSend)
 }
 func (s stubUserAssetService) SendAdminMessage(ctx context.Context, userID int64, subject, htmlBody, textBody string) (*model.AdminSendMessageResponse, error) {
 	return s.sendAdminMessageFn(ctx, userID, subject, htmlBody, textBody)
+}
+func (s stubUserAssetService) ListSchedulerStates(ctx context.Context) (*model.SchedulerStateResponse, error) {
+	if s.listSchedulerStatesFn == nil {
+		return &model.SchedulerStateResponse{Items: []model.SchedulerStateItem{}}, nil
+	}
+	return s.listSchedulerStatesFn(ctx)
 }
 
 func TestRouterSmoke_UserAssetFlows(t *testing.T) {
@@ -111,11 +118,18 @@ func TestRouterSmoke_UserAssetFlows(t *testing.T) {
 		getCatalogItemFn: func(ctx context.Context, itemID string) (*catalog.Item, error) {
 			return &catalog.Item{ID: itemID, Game: "warframe", Source: "market", Name: "Frost Prime Set", Slug: "frost_prime_set", ImageURL: "https://cdn/item.png", IsActive: true}, nil
 		},
-		sendManualPriceAlertsFn: func(ctx context.Context, userID int64) (*model.AdminManualPriceAlertResponse, error) {
-			return &model.AdminManualPriceAlertResponse{TargetUserID: userID, UsersChecked: 1, EmailsSent: 1, ChangesFound: 2, UsersWithDiff: 1}, nil
+		sendManualPriceAlertsFn: func(ctx context.Context, userID int64, forceSend bool) (*model.AdminManualPriceAlertResponse, error) {
+			mode := "diff"
+			if forceSend {
+				mode = "snapshot"
+			}
+			return &model.AdminManualPriceAlertResponse{TargetUserID: userID, Mode: mode, UsersChecked: 1, EmailsSent: 1, ChangesFound: 2, UsersWithDiff: 1}, nil
 		},
 		sendAdminMessageFn: func(ctx context.Context, userID int64, subject, htmlBody, textBody string) (*model.AdminSendMessageResponse, error) {
 			return &model.AdminSendMessageResponse{TargetUserID: userID, UsersChecked: 1, EmailsSent: 1}, nil
+		},
+		listSchedulerStatesFn: func(ctx context.Context) (*model.SchedulerStateResponse, error) {
+			return &model.SchedulerStateResponse{Items: []model.SchedulerStateItem{{JobName: "price_alert_dispatch", Status: "ok", UpdatedAt: now.Format(time.RFC3339)}}}, nil
 		},
 	}))
 
@@ -138,7 +152,9 @@ func TestRouterSmoke_UserAssetFlows(t *testing.T) {
 		{"get preferences", http.MethodGet, "/preferences?user_id=1", nil, http.StatusOK, "currency"},
 		{"update preferences", http.MethodPut, "/preferences", map[string]any{"user_id": 1, "currency": "eur", "notifications_enabled": false, "notification_mode": "immediate", "notification_time": "10:15"}, http.StatusOK, "currency"},
 		{"admin send price alerts", http.MethodPost, "/admin/price-alerts/send", map[string]any{"user_id": 1}, http.StatusOK, "emails_sent"},
+		{"admin send price alerts force", http.MethodPost, "/admin/price-alerts/send", map[string]any{"user_id": 1, "force_send": true}, http.StatusOK, "mode"},
 		{"admin send message", http.MethodPost, "/admin/messages/send", map[string]any{"user_id": 1, "subject": "Hello", "html_body": "<p>Hello</p>"}, http.StatusOK, "emails_sent"},
+		{"admin scheduler state", http.MethodGet, "/admin/scheduler-state", nil, http.StatusOK, "items"},
 	}
 
 	for _, tt := range tests {

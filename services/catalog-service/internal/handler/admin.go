@@ -65,6 +65,15 @@ func (h *Handler) GetAdminJob(c *gin.Context) {
 	c.JSON(http.StatusOK, toAdminJobResponse(job))
 }
 
+func (h *Handler) ListSchedulerStates(c *gin.Context) {
+	resp, err := h.adminService.ListSchedulerStates(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
 func toAdminJobResponse(job interface {
 	GetID() string
 }) model.AdminJobStatusResponse {

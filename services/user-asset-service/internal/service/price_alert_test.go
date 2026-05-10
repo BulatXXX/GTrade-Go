@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	authclient "gtrade/services/user-asset-service/internal/client/auth"
 	"gtrade/services/user-asset-service/internal/client/catalog"
 	notificationclient "gtrade/services/user-asset-service/internal/client/notification"
@@ -173,6 +174,7 @@ func TestPriceAlertService_RunCycleImmediateSendsEmailAndAdvancesState(t *testin
 
 	notificationClient := &stubPriceAlertNotification{}
 	svc := NewPriceAlertService(
+		zerolog.Nop(),
 		repo,
 		catalogClient,
 		stubPriceAlertAuth{
@@ -211,6 +213,7 @@ func TestPriceAlertService_SendAdminMessageToAllVerifiedUsers(t *testing.T) {
 
 	notificationClient := &stubPriceAlertNotification{}
 	svc := NewPriceAlertService(
+		zerolog.Nop(),
 		&stubPriceAlertRepo{},
 		stubPriceAlertCatalog{},
 		stubPriceAlertAuth{

@@ -15,9 +15,10 @@ import (
 )
 
 type stubAdminUseCase struct {
-	startCatalogImportFn func(ctx context.Context, req model.AdminCatalogImportRequest) (*adminjobs.Job, error)
-	listJobsFn           func() []*adminjobs.Job
-	getJobFn             func(id string) *adminjobs.Job
+	startCatalogImportFn  func(ctx context.Context, req model.AdminCatalogImportRequest) (*adminjobs.Job, error)
+	listJobsFn            func() []*adminjobs.Job
+	getJobFn              func(id string) *adminjobs.Job
+	listSchedulerStatesFn func(ctx context.Context) (*model.SchedulerStateResponse, error)
 }
 
 func (s stubAdminUseCase) StartPriceHistorySync(ctx context.Context) *adminjobs.Job {
@@ -40,6 +41,13 @@ func (s stubAdminUseCase) ListJobs() []*adminjobs.Job {
 		return nil
 	}
 	return s.listJobsFn()
+}
+
+func (s stubAdminUseCase) ListSchedulerStates(ctx context.Context) (*model.SchedulerStateResponse, error) {
+	if s.listSchedulerStatesFn == nil {
+		return &model.SchedulerStateResponse{Items: []model.SchedulerStateItem{}}, nil
+	}
+	return s.listSchedulerStatesFn(ctx)
 }
 
 func TestStartCatalogImport_ReturnsAcceptedJob(t *testing.T) {

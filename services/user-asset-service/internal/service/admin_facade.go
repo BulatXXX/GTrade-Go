@@ -10,14 +10,16 @@ import (
 )
 
 type HandlerFacade struct {
-	userAsset  *UserAssetService
-	priceAlert *PriceAlertService
+	userAsset      *UserAssetService
+	priceAlert     *PriceAlertService
+	schedulerState *SchedulerStateService
 }
 
-func NewHandlerFacade(userAsset *UserAssetService, priceAlert *PriceAlertService) *HandlerFacade {
+func NewHandlerFacade(userAsset *UserAssetService, priceAlert *PriceAlertService, schedulerState *SchedulerStateService) *HandlerFacade {
 	return &HandlerFacade{
-		userAsset:  userAsset,
-		priceAlert: priceAlert,
+		userAsset:      userAsset,
+		priceAlert:     priceAlert,
+		schedulerState: schedulerState,
 	}
 }
 
@@ -65,21 +67,37 @@ func (f *HandlerFacade) GetCatalogItem(ctx context.Context, itemID string) (*cat
 	return f.userAsset.GetCatalogItem(ctx, itemID)
 }
 
-func (f *HandlerFacade) SendManualPriceAlerts(ctx context.Context, userID int64) (*model.AdminManualPriceAlertResponse, error) {
+func (f *HandlerFacade) SendManualPriceAlerts(ctx context.Context, userID int64, forceSend bool) (*model.AdminManualPriceAlertResponse, error) {
 	if f.priceAlert == nil {
-		return &model.AdminManualPriceAlertResponse{TargetUserID: userID}, nil
+		return &model.AdminManualPriceAlertResponse{TargetUserID: userID, Mode: dispatchMode(forceSend)}, nil
 	}
-	result, err := f.priceAlert.SendManualPriceAlerts(ctx, userID, time.Now().UTC())
+	result, err := f.priceAlert.SendManualPriceAlerts(ctx, userID, forceSend, time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}
 	return &model.AdminManualPriceAlertResponse{
 		TargetUserID:  result.TargetUserID,
+		Mode:          result.Mode,
 		UsersChecked:  result.UsersChecked,
 		EmailsSent:    result.EmailsSent,
 		ChangesFound:  result.ChangesFound,
 		UsersWithDiff: result.UsersWithDiff,
+		UsersSkipped:  result.UsersSkipped,
 	}, nil
+}
+
+func (f *HandlerFacade) ListSchedulerStates(ctx context.Context) (*model.SchedulerStateResponse, error) {
+	if f.schedulerState == nil {
+		return &model.SchedulerStateResponse{Items: []model.SchedulerStateItem{}}, nil
+	}
+	return f.schedulerState.List(ctx)
+}
+
+func dispatchMode(forceSend bool) string {
+	if forceSend {
+		return "snapshot"
+	}
+	return "diff"
 }
 
 func (f *HandlerFacade) SendAdminMessage(ctx context.Context, userID int64, subject, htmlBody, textBody string) (*model.AdminSendMessageResponse, error) {

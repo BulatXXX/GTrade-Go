@@ -21,7 +21,13 @@ func NewPriceHistorySyncRunner(manager *Manager, collector *scheduler.PriceHisto
 func (r *PriceHistorySyncRunner) StartPriceHistorySync(ctx context.Context) *Job {
 	return r.manager.Start(ctx, "price-history-sync", func(ctx context.Context, job *Job) error {
 		observer := &progressObserver{manager: r.manager, jobID: job.ID}
-		r.collector.RunOnce(ctx, observer)
+		acquired, err := r.collector.RunWithExternalLock(ctx, observer)
+		if err != nil {
+			return err
+		}
+		if !acquired {
+			return ErrJobLockBusy
+		}
 		return nil
 	})
 }

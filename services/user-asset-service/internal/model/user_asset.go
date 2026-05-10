@@ -68,15 +68,34 @@ type PreferencesResponse struct {
 }
 
 type AdminManualPriceAlertRequest struct {
-	UserID int64 `json:"user_id,omitempty"`
+	UserID    int64 `json:"user_id,omitempty"`
+	ForceSend bool  `json:"force_send,omitempty"`
 }
 
 type AdminManualPriceAlertResponse struct {
-	TargetUserID  int64 `json:"target_user_id,omitempty"`
-	UsersChecked  int   `json:"users_checked"`
-	EmailsSent    int   `json:"emails_sent"`
-	ChangesFound  int   `json:"changes_found"`
-	UsersWithDiff int   `json:"users_with_diff"`
+	TargetUserID  int64  `json:"target_user_id,omitempty"`
+	Mode          string `json:"mode"`
+	UsersChecked  int    `json:"users_checked"`
+	EmailsSent    int    `json:"emails_sent"`
+	ChangesFound  int    `json:"changes_found"`
+	UsersWithDiff int    `json:"users_with_diff"`
+	UsersSkipped  int    `json:"users_skipped"`
+}
+
+type SchedulerStateResponse struct {
+	Items []SchedulerStateItem `json:"items"`
+}
+
+type SchedulerStateItem struct {
+	JobName        string  `json:"job_name"`
+	Status         string  `json:"status"`
+	LastStartedAt  *string `json:"last_started_at,omitempty"`
+	LastFinishedAt *string `json:"last_finished_at,omitempty"`
+	LastError      *string `json:"last_error,omitempty"`
+	LastProcessed  int     `json:"last_processed"`
+	LastTotal      int     `json:"last_total"`
+	RunsTotal      int64   `json:"runs_total"`
+	UpdatedAt      string  `json:"updated_at"`
 }
 
 type AdminSendMessageRequest struct {

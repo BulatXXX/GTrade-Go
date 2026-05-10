@@ -2,10 +2,16 @@ package adminjobs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 )
+
+// ErrJobLockBusy is returned by a Runner when the distributed advisory lock
+// for a given job is already held — Manager translates that into a "skipped"
+// status instead of "failed".
+var ErrJobLockBusy = errors.New("job lock busy")
 
 type Runner func(ctx context.Context, job *Job) error
 
@@ -74,13 +80,17 @@ func (m *Manager) StartWithMeta(ctx context.Context, jobType string, meta map[st
 		defer m.mu.Unlock()
 		finishedAt := time.Now().UTC()
 		job.FinishedAt = &finishedAt
-		if err != nil {
+		switch {
+		case errors.Is(err, ErrJobLockBusy):
+			job.Status = "skipped"
+			job.Error = err.Error()
+		case err != nil:
 			job.Status = "failed"
 			job.Error = err.Error()
-			return
+		default:
+			job.Status = "completed"
+			job.ProgressPercent = 100
 		}
-		job.Status = "completed"
-		job.ProgressPercent = 100
 	}()
 
 	return cloneJob(job)

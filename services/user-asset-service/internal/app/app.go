@@ -41,15 +41,22 @@ func Run(ctx context.Context) error {
 	userAssetService := service.NewUserAssetService(repo, catalogClient)
 	authClient := authclient.New(cfg.AuthServiceURL, cfg.InternalAPIToken)
 	notificationClient := notificationclient.New(cfg.NotificationServiceURL)
-	priceAlertService := service.NewPriceAlertService(repo, catalogClient, authClient, notificationClient)
-	h := handler.New(cfg.ServiceName, service.NewHandlerFacade(userAssetService, priceAlertService))
+	priceAlertService := service.NewPriceAlertService(logger, repo, catalogClient, authClient, notificationClient)
+	schedulerStateService := service.NewSchedulerStateService(repo)
+	h := handler.New(cfg.ServiceName, service.NewHandlerFacade(userAssetService, priceAlertService, schedulerStateService))
 	r := httpserver.NewRouter(logger, h)
 
 	alertInterval, err := time.ParseDuration(cfg.PriceAlertCheckInterval)
 	if err != nil {
 		return fmt.Errorf("parse PRICE_ALERT_CHECK_INTERVAL: %w", err)
 	}
-	priceAlertScheduler := scheduler.NewPriceAlertScheduler(logger, priceAlertService, alertInterval)
+	priceAlertScheduler := scheduler.NewPriceAlertScheduler(
+		logger,
+		priceAlertService,
+		repo,
+		repository.SchedulerLockKey(scheduler.PriceAlertJobName),
+		alertInterval,
+	)
 	priceAlertScheduler.Start(ctx)
 
 	srv := &http.Server{

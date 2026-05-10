@@ -17,15 +17,27 @@ type CatalogImportUpserter interface {
 	UpsertItem(ctx context.Context, input model.CreateItemInput) (*model.Item, error)
 }
 
-type CatalogImportRunner struct {
-	manager *Manager
-	service CatalogImportUpserter
+type SchedulerStateStore interface {
+	AcquireSchedulerLock(ctx context.Context, lockKey int64) (bool, func(), error)
+	MarkSchedulerStarted(ctx context.Context, jobName string, startedAt time.Time) error
+	MarkSchedulerFinished(ctx context.Context, jobName string, finishedAt time.Time, runErr error, processed, total int) error
 }
 
-func NewCatalogImportRunner(manager *Manager, service CatalogImportUpserter) *CatalogImportRunner {
+type LockKeyFn func(jobName string) int64
+
+type CatalogImportRunner struct {
+	manager   *Manager
+	service   CatalogImportUpserter
+	store     SchedulerStateStore
+	lockKeyFn LockKeyFn
+}
+
+func NewCatalogImportRunner(manager *Manager, service CatalogImportUpserter, store SchedulerStateStore, lockKeyFn LockKeyFn) *CatalogImportRunner {
 	return &CatalogImportRunner{
-		manager: manager,
-		service: service,
+		manager:   manager,
+		service:   service,
+		store:     store,
+		lockKeyFn: lockKeyFn,
 	}
 }
 
@@ -61,9 +73,33 @@ func (r *CatalogImportRunner) StartCatalogImport(ctx context.Context, req model.
 
 	repo := &catalogImportRepository{service: r.service}
 	tr := transform.NewNoopTransformer()
+	jobName := fmt.Sprintf("catalog_import_%s", game)
 
 	job := r.manager.StartWithMeta(ctx, "catalog-import", meta, func(ctx context.Context, job *Job) error {
 		observer := &catalogImportObserver{manager: r.manager, jobID: job.ID}
+
+		if r.store != nil && r.lockKeyFn != nil {
+			lockKey := r.lockKeyFn(jobName)
+			acquired, release, lockErr := r.store.AcquireSchedulerLock(ctx, lockKey)
+			if lockErr != nil {
+				return lockErr
+			}
+			if !acquired {
+				return ErrJobLockBusy
+			}
+			defer release()
+
+			startedAt := time.Now().UTC()
+			if err := r.store.MarkSchedulerStarted(ctx, jobName, startedAt); err != nil {
+				// non-fatal: the lock guarantees mutual exclusion regardless of state row.
+			}
+			processed, total, runErr := importer.New(src, tr, repo).WithObserver(observer).Run(ctx)
+			if err := r.store.MarkSchedulerFinished(ctx, jobName, time.Now().UTC(), runErr, processed, total); err != nil {
+				// non-fatal
+			}
+			return runErr
+		}
+
 		_, _, err := importer.New(src, tr, repo).WithObserver(observer).Run(ctx)
 		return err
 	})

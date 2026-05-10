@@ -25,6 +25,7 @@ type AdminUseCase interface {
 	StartCatalogImport(ctx context.Context, req model.AdminCatalogImportRequest) (*adminjobs.Job, error)
 	GetJob(id string) *adminjobs.Job
 	ListJobs() []*adminjobs.Job
+	ListSchedulerStates(ctx context.Context) (*model.SchedulerStateResponse, error)
 }
 
 type Handler struct {
