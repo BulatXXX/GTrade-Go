@@ -111,16 +111,30 @@ func (s *PriceAlertService) RunCycle(ctx context.Context, now time.Time) error {
 
 	for _, sub := range subscriptions {
 		if !sub.NotificationsEnabled {
+			s.logSkip(sub, "notifications_disabled", nil)
 			continue
 		}
 
 		item, err := s.catalog.GetItem(ctx, sub.ItemID)
 		if err != nil || item == nil || !item.IsActive {
+			reason := "item_inactive"
+			switch {
+			case err != nil:
+				reason = "catalog_error"
+			case item == nil:
+				reason = "item_not_found"
+			}
+			s.logSkip(sub, reason, err)
 			continue
 		}
 
 		historyResp, err := s.catalog.GetPriceHistory(ctx, sub.ItemID, "", 10)
 		if err != nil || historyResp == nil {
+			reason := "price_history_nil"
+			if err != nil {
+				reason = "price_history_error"
+			}
+			s.logSkip(sub, reason, err)
 			continue
 		}
 
@@ -214,6 +228,7 @@ func (s *PriceAlertService) SendManualPriceAlerts(ctx context.Context, userID in
 			continue
 		}
 		if !sub.NotificationsEnabled {
+			s.logSkip(sub, "notifications_disabled", nil)
 			continue
 		}
 
@@ -221,11 +236,24 @@ func (s *PriceAlertService) SendManualPriceAlerts(ctx context.Context, userID in
 
 		item, err := s.catalog.GetItem(ctx, sub.ItemID)
 		if err != nil || item == nil || !item.IsActive {
+			reason := "item_inactive"
+			switch {
+			case err != nil:
+				reason = "catalog_error"
+			case item == nil:
+				reason = "item_not_found"
+			}
+			s.logSkip(sub, reason, err)
 			continue
 		}
 
 		historyResp, err := s.catalog.GetPriceHistory(ctx, sub.ItemID, "", 10)
 		if err != nil || historyResp == nil {
+			reason := "price_history_nil"
+			if err != nil {
+				reason = "price_history_error"
+			}
+			s.logSkip(sub, reason, err)
 			continue
 		}
 
@@ -767,6 +795,16 @@ func stateKey(source, gameMode string) string {
 func withoutSentAt(state repository.WatchlistNotificationState) repository.WatchlistNotificationState {
 	state.LastNotificationSentAt = nil
 	return state
+}
+
+func (s *PriceAlertService) logSkip(sub repository.NotificationSubscription, reason string, err error) {
+	s.logger.Info().
+		Int64("user_id", sub.UserID).
+		Int64("watchlist_id", sub.WatchlistID).
+		Str("item_id", sub.ItemID).
+		Str("skip_reason", reason).
+		Err(err).
+		Msg("price alert subscription skipped")
 }
 
 func float64Ptr(v float64) *float64 {

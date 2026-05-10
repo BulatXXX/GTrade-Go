@@ -3,6 +3,7 @@ package adminjobs
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"gtrade/services/catalog-service/internal/model"
 	"gtrade/services/catalog-service/internal/repository"
@@ -16,13 +17,15 @@ type CompositeRunner struct {
 	priceHistory   *PriceHistorySyncRunner
 	catalogImport  *CatalogImportRunner
 	schedulerState SchedulerStateLister
+	schedules      map[string]time.Duration
 }
 
-func NewCompositeRunner(priceHistory *PriceHistorySyncRunner, catalogImport *CatalogImportRunner, schedulerState SchedulerStateLister) *CompositeRunner {
+func NewCompositeRunner(priceHistory *PriceHistorySyncRunner, catalogImport *CatalogImportRunner, schedulerState SchedulerStateLister, schedules map[string]time.Duration) *CompositeRunner {
 	return &CompositeRunner{
 		priceHistory:   priceHistory,
 		catalogImport:  catalogImport,
 		schedulerState: schedulerState,
+		schedules:      schedules,
 	}
 }
 
@@ -61,16 +64,30 @@ func (r *CompositeRunner) ListSchedulerStates(ctx context.Context) (*model.Sched
 			s := st.LastFinishedAt.UTC().Format("2006-01-02T15:04:05Z07:00")
 			finishedAt = &s
 		}
+
+		var intervalSeconds *int64
+		var nextRunAt *string
+		if interval, ok := r.schedules[st.JobName]; ok && interval > 0 {
+			seconds := int64(interval / time.Second)
+			intervalSeconds = &seconds
+			if st.LastStartedAt != nil {
+				next := st.LastStartedAt.Add(interval).UTC().Format("2006-01-02T15:04:05Z07:00")
+				nextRunAt = &next
+			}
+		}
+
 		out = append(out, model.SchedulerStateItem{
-			JobName:        st.JobName,
-			Status:         st.Status,
-			LastStartedAt:  startedAt,
-			LastFinishedAt: finishedAt,
-			LastError:      st.LastError,
-			LastProcessed:  st.LastProcessed,
-			LastTotal:      st.LastTotal,
-			RunsTotal:      st.RunsTotal,
-			UpdatedAt:      st.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+			JobName:         st.JobName,
+			Status:          st.Status,
+			LastStartedAt:   startedAt,
+			LastFinishedAt:  finishedAt,
+			LastError:       st.LastError,
+			LastProcessed:   st.LastProcessed,
+			LastTotal:       st.LastTotal,
+			RunsTotal:       st.RunsTotal,
+			UpdatedAt:       st.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+			IntervalSeconds: intervalSeconds,
+			NextRunAt:       nextRunAt,
 		})
 	}
 	return &model.SchedulerStateResponse{Items: out}, nil

@@ -469,6 +469,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /admin/scheduler-state:
+    get:
+      summary: List background scheduler jobs and their persisted state
+      description: |
+        Snapshot of `schedule_state` rows for catalog-side jobs
+        (`price_history_sync`, `catalog_import_<game>`). Updated by the
+        background ticker and admin endpoints whenever a run starts/finishes.
+        A job whose `status` is `running` cannot be triggered manually — the
+        admin button will create a new job with `status=skipped` because the
+        advisory lock is busy.
+      tags: [admin]
+      responses:
+        '200':
+          description: Scheduler state snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulerStateResponse'
 components:
   schemas:
     HealthResponse:
@@ -786,6 +804,61 @@ components:
           type: object
           additionalProperties:
             type: string
+    SchedulerStateResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchedulerStateItem'
+    SchedulerStateItem:
+      type: object
+      required: [job_name, status, last_processed, last_total, runs_total, updated_at]
+      properties:
+        job_name:
+          type: string
+          enum: [price_history_sync, catalog_import_warframe, catalog_import_eve, catalog_import_tarkov]
+          example: price_history_sync
+        status:
+          type: string
+          enum: [idle, running, ok, error]
+          example: ok
+        last_started_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+        last_processed:
+          type: integer
+          example: 1438
+        last_total:
+          type: integer
+          example: 1500
+        runs_total:
+          type: integer
+          format: int64
+          example: 42
+        updated_at:
+          type: string
+          format: date-time
+        interval_seconds:
+          type: integer
+          format: int64
+          nullable: true
+          description: Tick period for ticker-driven jobs. Omitted for admin-triggered jobs (catalog_import_*).
+          example: 86400
+        next_run_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Computed as last_started_at + interval. Omitted when the job has no schedule or has never run.
     ErrorResponse:
       type: object
       required: [error]

@@ -541,6 +541,17 @@ components:
         updated_at:
           type: string
           format: date-time
+        interval_seconds:
+          type: integer
+          format: int64
+          nullable: true
+          description: Tick period for ticker-driven jobs (price_alert_dispatch).
+          example: 60
+        next_run_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Computed as last_started_at + interval. Omitted when the job has no schedule or has never run.
     AdminSendMessageRequest:
       type: object
       required: [subject]

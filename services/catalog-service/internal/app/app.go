@@ -51,7 +51,10 @@ func Run(ctx context.Context) error {
 	jobManager := adminjobs.NewManager()
 	priceHistoryRunner := adminjobs.NewPriceHistorySyncRunner(jobManager, priceCollector)
 	catalogImportRunner := adminjobs.NewCatalogImportRunner(jobManager, svc, repo, repository.SchedulerLockKey)
-	adminRunner := adminjobs.NewCompositeRunner(priceHistoryRunner, catalogImportRunner, repo)
+	schedules := map[string]time.Duration{
+		scheduler.PriceHistoryJobName: refreshInterval,
+	}
+	adminRunner := adminjobs.NewCompositeRunner(priceHistoryRunner, catalogImportRunner, repo, schedules)
 	h := handler.New(cfg.ServiceName, svc, adminRunner)
 	r := httpserver.NewRouterWithSecurity(logger, h, cfg.JWTSecret)
 

@@ -180,13 +180,15 @@ type SchedulerStateResponse struct {
 }
 
 type SchedulerStateItem struct {
-	JobName        string  `json:"job_name"`
-	Status         string  `json:"status"`
-	LastStartedAt  *string `json:"last_started_at,omitempty"`
-	LastFinishedAt *string `json:"last_finished_at,omitempty"`
-	LastError      *string `json:"last_error,omitempty"`
-	LastProcessed  int     `json:"last_processed"`
-	LastTotal      int     `json:"last_total"`
-	RunsTotal      int64   `json:"runs_total"`
-	UpdatedAt      string  `json:"updated_at"`
+	JobName         string  `json:"job_name"`
+	Status          string  `json:"status"`
+	LastStartedAt   *string `json:"last_started_at,omitempty"`
+	LastFinishedAt  *string `json:"last_finished_at,omitempty"`
+	LastError       *string `json:"last_error,omitempty"`
+	LastProcessed   int     `json:"last_processed"`
+	LastTotal       int     `json:"last_total"`
+	RunsTotal       int64   `json:"runs_total"`
+	UpdatedAt       string  `json:"updated_at"`
+	IntervalSeconds *int64  `json:"interval_seconds,omitempty"`
+	NextRunAt       *string `json:"next_run_at,omitempty"`
 }

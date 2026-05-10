@@ -42,14 +42,18 @@ func Run(ctx context.Context) error {
 	authClient := authclient.New(cfg.AuthServiceURL, cfg.InternalAPIToken)
 	notificationClient := notificationclient.New(cfg.NotificationServiceURL)
 	priceAlertService := service.NewPriceAlertService(logger, repo, catalogClient, authClient, notificationClient)
-	schedulerStateService := service.NewSchedulerStateService(repo)
-	h := handler.New(cfg.ServiceName, service.NewHandlerFacade(userAssetService, priceAlertService, schedulerStateService))
-	r := httpserver.NewRouter(logger, h)
 
 	alertInterval, err := time.ParseDuration(cfg.PriceAlertCheckInterval)
 	if err != nil {
 		return fmt.Errorf("parse PRICE_ALERT_CHECK_INTERVAL: %w", err)
 	}
+
+	schedules := map[string]time.Duration{
+		scheduler.PriceAlertJobName: alertInterval,
+	}
+	schedulerStateService := service.NewSchedulerStateService(repo, schedules)
+	h := handler.New(cfg.ServiceName, service.NewHandlerFacade(userAssetService, priceAlertService, schedulerStateService))
+	r := httpserver.NewRouter(logger, h)
 	priceAlertScheduler := scheduler.NewPriceAlertScheduler(
 		logger,
 		priceAlertService,

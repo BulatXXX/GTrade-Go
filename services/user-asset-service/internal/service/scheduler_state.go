@@ -16,11 +16,12 @@ type schedulerStateRepo interface {
 }
 
 type SchedulerStateService struct {
-	repo schedulerStateRepo
+	repo      schedulerStateRepo
+	schedules map[string]time.Duration
 }
 
-func NewSchedulerStateService(repo schedulerStateRepo) *SchedulerStateService {
-	return &SchedulerStateService{repo: repo}
+func NewSchedulerStateService(repo schedulerStateRepo, schedules map[string]time.Duration) *SchedulerStateService {
+	return &SchedulerStateService{repo: repo, schedules: schedules}
 }
 
 func (s *SchedulerStateService) List(ctx context.Context) (*model.SchedulerStateResponse, error) {
@@ -33,16 +34,29 @@ func (s *SchedulerStateService) List(ctx context.Context) (*model.SchedulerState
 	}
 	out := make([]model.SchedulerStateItem, 0, len(states))
 	for _, st := range states {
+		var intervalSeconds *int64
+		var nextRunAt *string
+		if interval, ok := s.schedules[st.JobName]; ok && interval > 0 {
+			seconds := int64(interval / time.Second)
+			intervalSeconds = &seconds
+			if st.LastStartedAt != nil {
+				next := st.LastStartedAt.Add(interval).UTC().Format(timeFormatRFC3339)
+				nextRunAt = &next
+			}
+		}
+
 		out = append(out, model.SchedulerStateItem{
-			JobName:        st.JobName,
-			Status:         st.Status,
-			LastStartedAt:  formatNullableTime(st.LastStartedAt),
-			LastFinishedAt: formatNullableTime(st.LastFinishedAt),
-			LastError:      st.LastError,
-			LastProcessed:  st.LastProcessed,
-			LastTotal:      st.LastTotal,
-			RunsTotal:      st.RunsTotal,
-			UpdatedAt:      st.UpdatedAt.UTC().Format(timeFormatRFC3339),
+			JobName:         st.JobName,
+			Status:          st.Status,
+			LastStartedAt:   formatNullableTime(st.LastStartedAt),
+			LastFinishedAt:  formatNullableTime(st.LastFinishedAt),
+			LastError:       st.LastError,
+			LastProcessed:   st.LastProcessed,
+			LastTotal:       st.LastTotal,
+			RunsTotal:       st.RunsTotal,
+			UpdatedAt:       st.UpdatedAt.UTC().Format(timeFormatRFC3339),
+			IntervalSeconds: intervalSeconds,
+			NextRunAt:       nextRunAt,
 		})
 	}
 	return &model.SchedulerStateResponse{Items: out}, nil
