@@ -187,7 +187,11 @@ func (s *PriceAlertService) RunCycle(ctx context.Context, now time.Time) error {
 
 	for _, pending := range immediate {
 		if _, err := s.dispatchUserNotification(ctx, pending, now, false); err != nil {
-			return err
+			s.logger.Error().
+				Int64("user_id", pending.userID).
+				Int("changes", len(pending.changes)).
+				Err(err).
+				Msg("immediate dispatch failed, continuing cycle")
 		}
 	}
 
@@ -195,7 +199,11 @@ func (s *PriceAlertService) RunCycle(ctx context.Context, now time.Time) error {
 		pending := digest[userID]
 		if pending != nil {
 			if _, err := s.dispatchUserNotification(ctx, pending, now, true); err != nil {
-				return err
+				s.logger.Error().
+					Int64("user_id", userID).
+					Int("changes", len(pending.changes)).
+					Err(err).
+					Msg("digest dispatch failed, continuing cycle")
 			}
 			continue
 		}
@@ -295,7 +303,13 @@ func (s *PriceAlertService) SendManualPriceAlerts(ctx context.Context, userID in
 		}
 		sent, err := s.dispatchUserNotification(ctx, pending, now, false)
 		if err != nil {
-			return nil, err
+			s.logger.Error().
+				Int64("user_id", pending.userID).
+				Int("changes", len(pending.changes)).
+				Err(err).
+				Msg("manual diff dispatch failed, continuing with remaining users")
+			result.UsersSkipped++
+			continue
 		}
 		if sent {
 			result.EmailsSent++
@@ -317,33 +331,83 @@ func (s *PriceAlertService) sendForcedSnapshot(ctx context.Context, userID int64
 		return nil, fmt.Errorf("list notification subscriptions: %w", err)
 	}
 
+	s.logger.Info().
+		Int64("target_user_id", userID).
+		Int("subscriptions_total", len(subscriptions)).
+		Msg("force_send: loaded subscriptions")
+
 	pendingByUser := map[int64]*pendingUserNotification{}
 	checkedUsers := map[int64]bool{}
+	skippedByUser := map[int64]int{}
 
 	for _, sub := range subscriptions {
 		if userID > 0 && sub.UserID != userID {
 			continue
 		}
 		if !sub.NotificationsEnabled {
+			s.logger.Info().
+				Int64("user_id", sub.UserID).
+				Str("item_id", sub.ItemID).
+				Str("skip_reason", "notifications_disabled").
+				Msg("force_send: subscription skipped")
+			skippedByUser[sub.UserID]++
 			continue
 		}
 		checkedUsers[sub.UserID] = true
 
 		item, err := s.catalog.GetItem(ctx, sub.ItemID)
 		if err != nil || item == nil || !item.IsActive {
-			s.logger.Debug().
+			reason := "item_inactive"
+			switch {
+			case err != nil:
+				reason = "catalog_error"
+			case item == nil:
+				reason = "item_not_found"
+			}
+			s.logger.Info().
 				Int64("user_id", sub.UserID).
 				Str("item_id", sub.ItemID).
-				Msg("force_send: item missing or inactive, skipping line")
+				Str("skip_reason", reason).
+				Err(err).
+				Msg("force_send: subscription skipped")
+			skippedByUser[sub.UserID]++
 			continue
 		}
 
 		historyResp, err := s.catalog.GetPriceHistory(ctx, sub.ItemID, "", 1)
 		if err != nil || historyResp == nil || len(historyResp.History) == 0 {
-			s.logger.Debug().
+			if err != nil {
+				s.logger.Info().
+					Int64("user_id", sub.UserID).
+					Str("item_id", sub.ItemID).
+					Str("skip_reason", "price_history_error").
+					Err(err).
+					Msg("force_send: subscription skipped")
+				skippedByUser[sub.UserID]++
+				continue
+			}
+
+			s.logger.Info().
 				Int64("user_id", sub.UserID).
 				Str("item_id", sub.ItemID).
-				Msg("force_send: no price history available, skipping line")
+				Msg("force_send: including subscription without price history")
+
+			change := PriceAlertChange{
+				ItemID:      item.ID,
+				ItemName:    item.Name,
+				ImageURL:    item.ImageURL,
+				Game:        item.Game,
+				Source:      item.Source,
+				Currency:    sub.Currency,
+				CollectedOn: "price unavailable",
+			}
+
+			pending := pendingByUser[sub.UserID]
+			if pending == nil {
+				pending = &pendingUserNotification{mode: "snapshot", userID: sub.UserID}
+				pendingByUser[sub.UserID] = pending
+			}
+			pending.changes = append(pending.changes, change)
 			continue
 		}
 
@@ -377,14 +441,33 @@ func (s *PriceAlertService) sendForcedSnapshot(ctx context.Context, userID int64
 		UsersChecked: len(checkedUsers),
 	}
 
+	for uid, skipped := range skippedByUser {
+		if _, hasPending := pendingByUser[uid]; !hasPending {
+			s.logger.Warn().
+				Int64("user_id", uid).
+				Int("skipped_subscriptions", skipped).
+				Msg("force_send: user has no deliverable items, no email will be sent")
+		}
+	}
+
 	for _, pending := range pendingByUser {
 		result.ChangesFound += len(pending.changes)
 		if len(pending.changes) > 0 {
 			result.UsersWithDiff++
 		}
+		s.logger.Info().
+			Int64("user_id", pending.userID).
+			Int("changes", len(pending.changes)).
+			Msg("force_send: dispatching email")
 		sent, err := s.dispatchUserNotification(ctx, pending, now, false)
 		if err != nil {
-			return nil, err
+			s.logger.Error().
+				Int64("user_id", pending.userID).
+				Int("changes", len(pending.changes)).
+				Err(err).
+				Msg("force_send: dispatch failed, continuing with remaining users")
+			result.UsersSkipped++
+			continue
 		}
 		if sent {
 			result.EmailsSent++
@@ -392,6 +475,14 @@ func (s *PriceAlertService) sendForcedSnapshot(ctx context.Context, userID int64
 			result.UsersSkipped++
 		}
 	}
+
+	s.logger.Info().
+		Int64("target_user_id", userID).
+		Int("users_checked", result.UsersChecked).
+		Int("emails_sent", result.EmailsSent).
+		Int("users_skipped", result.UsersSkipped).
+		Int("changes_found", result.ChangesFound).
+		Msg("force_send: dispatch summary")
 
 	return result, nil
 }
@@ -742,15 +833,15 @@ func renderSnapshotEmail(changes []PriceAlertChange, now time.Time) (string, str
 			"game":          strings.ToUpper(change.Game),
 			"source":        change.Source,
 			"game_mode":     modeLabel,
-			"current_value": formatPrice(change.CurrentValue, change.Currency),
-			"collected_on":  change.CollectedOn,
+			"current_value": formatSnapshotPrice(change),
+			"collected_on":  formatSnapshotCollectedOn(change),
 		})
 
 		text.WriteString("- " + change.ItemName + " [" + strings.ToUpper(change.Game) + "]")
 		if change.GameMode != "" {
 			text.WriteString(" (" + change.GameMode + ")")
 		}
-		text.WriteString(": " + formatPrice(change.CurrentValue, change.Currency) + " on " + change.CollectedOn + "\n")
+		text.WriteString(": " + formatSnapshotPrice(change) + " on " + formatSnapshotCollectedOn(change) + "\n")
 	}
 
 	tpl := template.Must(template.New("watchlist-snapshot-email").Parse(watchlistSnapshotEmailTemplate))
@@ -827,6 +918,20 @@ func formatDelta(value float64, currency string) string {
 	return fmt.Sprintf("%s%.2f %s", prefix, value, strings.ToUpper(strings.TrimSpace(currency)))
 }
 
+func formatSnapshotPrice(change PriceAlertChange) string {
+	if strings.TrimSpace(change.CollectedOn) == "" || strings.EqualFold(strings.TrimSpace(change.CollectedOn), "price unavailable") {
+		return "price unavailable"
+	}
+	return formatPrice(change.CurrentValue, change.Currency)
+}
+
+func formatSnapshotCollectedOn(change PriceAlertChange) string {
+	if strings.TrimSpace(change.CollectedOn) == "" {
+		return "price unavailable"
+	}
+	return change.CollectedOn
+}
+
 const priceAlertEmailTemplate = `
 <!doctype html>
 <html lang="en">
@@ -836,34 +941,48 @@ const priceAlertEmailTemplate = `
   <title>{{ .Title }}</title>
 </head>
 <body style="margin:0;padding:24px;background:#f4efe8;font-family:Georgia,'Times New Roman',serif;color:#1f2933;">
-  <div style="max-width:760px;margin:0 auto;background:#fffdf8;border:1px solid #e8dcc9;border-radius:20px;overflow:hidden;">
-    <div style="padding:32px 36px;background:linear-gradient(135deg,#112d32,#8f5f3f);color:#fff7ec;">
-      <div style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;opacity:0.82;">GTrade Watchlist</div>
-      <h1 style="margin:12px 0 8px;font-size:30px;line-height:1.1;">{{ .Title }}</h1>
-      <p style="margin:0;font-size:14px;opacity:0.92;">Generated at {{ .Date }}</p>
-    </div>
-    <div style="padding:24px;">
-      {{ range .Changes }}
-      <div style="display:flex;gap:18px;padding:18px 0;border-bottom:1px solid #efe5d6;">
-        <div style="width:96px;min-width:96px;height:96px;border-radius:16px;background:#f0e4d3;overflow:hidden;">
-          {{ if .image_url }}
-          <img src="{{ .image_url }}" alt="{{ .name }}" style="width:96px;height:96px;object-fit:cover;display:block;">
-          {{ end }}
-        </div>
-        <div style="flex:1;">
-          <div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#8b6b4b;">{{ .game }} • {{ .source }} • {{ .game_mode }}</div>
-          <div style="margin:6px 0 8px;font-size:22px;font-weight:700;color:#1c2733;">{{ .name }}</div>
-          <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:14px;color:#3c4b5a;">
-            <div><strong>Current:</strong> {{ .current_value }}</div>
-            <div><strong>Previous:</strong> {{ .previous_value }}</div>
-            <div><strong>Change:</strong> {{ .delta }}</div>
-            <div><strong>Day:</strong> {{ .collected_on }}</div>
-          </div>
-        </div>
-      </div>
-      {{ end }}
-    </div>
-  </div>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:760px;margin:0 auto;background:#fffdf8;border:1px solid #e8dcc9;border-radius:20px;">
+    <tr>
+      <td style="padding:32px 36px;background:#5a4530;background-image:linear-gradient(135deg,#112d32,#8f5f3f);color:#fff7ec;border-top-left-radius:20px;border-top-right-radius:20px;">
+        <div style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;opacity:0.82;">GTrade Watchlist</div>
+        <h1 style="margin:12px 0 8px;font-size:30px;line-height:1.1;">{{ .Title }}</h1>
+        <p style="margin:0;font-size:14px;opacity:0.92;">Generated at {{ .Date }}</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:24px;">
+        {{ range .Changes }}
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-bottom:1px solid #efe5d6;">
+          <tr>
+            <td width="96" valign="middle" align="center" style="padding:18px 18px 18px 0;width:96px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="96" height="96" style="width:96px;height:96px;background:#f0e4d3;border-radius:16px;">
+                <tr>
+                  <td align="center" valign="middle" width="96" height="96" style="width:96px;height:96px;border-radius:16px;">
+                    {{ if .image_url }}<img src="{{ .image_url }}" alt="{{ .name }}" width="96" height="96" style="display:block;margin:0 auto;border:0;border-radius:16px;width:96px;height:96px;">{{ end }}
+                  </td>
+                </tr>
+              </table>
+            </td>
+            <td valign="middle" style="padding:18px 0;">
+              <div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#8b6b4b;">{{ .game }} &bull; {{ .source }} &bull; {{ .game_mode }}</div>
+              <div style="margin:6px 0 8px;font-size:22px;font-weight:700;color:#1c2733;">{{ .name }}</div>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:0 24px 4px 0;font-size:14px;color:#3c4b5a;"><strong>Current:</strong> {{ .current_value }}</td>
+                  <td style="padding:0 24px 4px 0;font-size:14px;color:#3c4b5a;"><strong>Previous:</strong> {{ .previous_value }}</td>
+                </tr>
+                <tr>
+                  <td style="padding:0 24px 0 0;font-size:14px;color:#3c4b5a;"><strong>Change:</strong> {{ .delta }}</td>
+                  <td style="padding:0 24px 0 0;font-size:14px;color:#3c4b5a;"><strong>Day:</strong> {{ .collected_on }}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+        {{ end }}
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
 `
@@ -877,32 +996,44 @@ const watchlistSnapshotEmailTemplate = `
   <title>{{ .Title }}</title>
 </head>
 <body style="margin:0;padding:24px;background:#f4efe8;font-family:Georgia,'Times New Roman',serif;color:#1f2933;">
-  <div style="max-width:760px;margin:0 auto;background:#fffdf8;border:1px solid #e8dcc9;border-radius:20px;overflow:hidden;">
-    <div style="padding:32px 36px;background:linear-gradient(135deg,#112d32,#8f5f3f);color:#fff7ec;">
-      <div style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;opacity:0.82;">GTrade Watchlist</div>
-      <h1 style="margin:12px 0 8px;font-size:30px;line-height:1.1;">{{ .Title }}</h1>
-      <p style="margin:0;font-size:14px;opacity:0.92;">Generated at {{ .Date }}</p>
-    </div>
-    <div style="padding:24px;">
-      {{ range .Items }}
-      <div style="display:flex;gap:18px;padding:18px 0;border-bottom:1px solid #efe5d6;">
-        <div style="width:96px;min-width:96px;height:96px;border-radius:16px;background:#f0e4d3;overflow:hidden;">
-          {{ if .image_url }}
-          <img src="{{ .image_url }}" alt="{{ .name }}" style="width:96px;height:96px;object-fit:cover;display:block;">
-          {{ end }}
-        </div>
-        <div style="flex:1;">
-          <div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#8b6b4b;">{{ .game }} • {{ .source }} • {{ .game_mode }}</div>
-          <div style="margin:6px 0 8px;font-size:22px;font-weight:700;color:#1c2733;">{{ .name }}</div>
-          <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:14px;color:#3c4b5a;">
-            <div><strong>Current price:</strong> {{ .current_value }}</div>
-            <div><strong>Day:</strong> {{ .collected_on }}</div>
-          </div>
-        </div>
-      </div>
-      {{ end }}
-    </div>
-  </div>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:760px;margin:0 auto;background:#fffdf8;border:1px solid #e8dcc9;border-radius:20px;">
+    <tr>
+      <td style="padding:32px 36px;background:#5a4530;background-image:linear-gradient(135deg,#112d32,#8f5f3f);color:#fff7ec;border-top-left-radius:20px;border-top-right-radius:20px;">
+        <div style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;opacity:0.82;">GTrade Watchlist</div>
+        <h1 style="margin:12px 0 8px;font-size:30px;line-height:1.1;">{{ .Title }}</h1>
+        <p style="margin:0;font-size:14px;opacity:0.92;">Generated at {{ .Date }}</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:24px;">
+        {{ range .Items }}
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-bottom:1px solid #efe5d6;">
+          <tr>
+            <td width="96" valign="middle" align="center" style="padding:18px 18px 18px 0;width:96px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="96" height="96" style="width:96px;height:96px;background:#f0e4d3;border-radius:16px;">
+                <tr>
+                  <td align="center" valign="middle" width="96" height="96" style="width:96px;height:96px;border-radius:16px;">
+                    {{ if .image_url }}<img src="{{ .image_url }}" alt="{{ .name }}" width="96" height="96" style="display:block;margin:0 auto;border:0;border-radius:16px;width:96px;height:96px;">{{ end }}
+                  </td>
+                </tr>
+              </table>
+            </td>
+            <td valign="middle" style="padding:18px 0;">
+              <div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#8b6b4b;">{{ .game }} &bull; {{ .source }} &bull; {{ .game_mode }}</div>
+              <div style="margin:6px 0 8px;font-size:22px;font-weight:700;color:#1c2733;">{{ .name }}</div>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:0 24px 0 0;font-size:14px;color:#3c4b5a;"><strong>Current price:</strong> {{ .current_value }}</td>
+                  <td style="padding:0 24px 0 0;font-size:14px;color:#3c4b5a;"><strong>Day:</strong> {{ .collected_on }}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+        {{ end }}
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
 `

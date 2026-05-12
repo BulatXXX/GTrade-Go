@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,15 +46,23 @@ func (s *stubPriceAlertRepo) UpsertUserNotificationDispatchState(ctx context.Con
 }
 
 type stubPriceAlertCatalog struct {
-	item    *catalog.Item
-	history *catalog.PriceHistoryResponse
+	item            *catalog.Item
+	history         *catalog.PriceHistoryResponse
+	itemsByID       map[string]*catalog.Item
+	historyByItemID map[string]*catalog.PriceHistoryResponse
 }
 
 func (s stubPriceAlertCatalog) GetItem(ctx context.Context, id string) (*catalog.Item, error) {
+	if s.itemsByID != nil {
+		return s.itemsByID[id], nil
+	}
 	return s.item, nil
 }
 
 func (s stubPriceAlertCatalog) GetPriceHistory(ctx context.Context, id, gameMode string, limit int) (*catalog.PriceHistoryResponse, error) {
+	if s.historyByItemID != nil {
+		return s.historyByItemID[id], nil
+	}
 	return s.history, nil
 }
 
@@ -231,5 +240,99 @@ func TestPriceAlertService_SendAdminMessageToAllVerifiedUsers(t *testing.T) {
 	}
 	if result.EmailsSent != 2 || len(notificationClient.requests) != 2 {
 		t.Fatalf("result=%#v requests=%d", result, len(notificationClient.requests))
+	}
+}
+
+func TestPriceAlertService_SendManualPriceAlertsForceSendIncludesItemsWithoutPriceHistory(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 11, 14, 11, 47, 0, time.UTC)
+	repo := &stubPriceAlertRepo{
+		subscriptions: []repository.NotificationSubscription{
+			{
+				WatchlistID:          21,
+				UserID:               7,
+				ItemID:               "item-with-price",
+				NotifyEnabled:        true,
+				Currency:             "isk",
+				NotificationsEnabled: true,
+			},
+			{
+				WatchlistID:          22,
+				UserID:               7,
+				ItemID:               "item-without-price",
+				NotifyEnabled:        true,
+				Currency:             "isk",
+				NotificationsEnabled: true,
+			},
+		},
+	}
+
+	catalogClient := stubPriceAlertCatalog{
+		itemsByID: map[string]*catalog.Item{
+			"item-with-price": {
+				ID:       "item-with-price",
+				Game:     "eve",
+				Source:   "esi",
+				Name:     "Plex",
+				ImageURL: "https://cdn.example.com/plex.png",
+				IsActive: true,
+			},
+			"item-without-price": {
+				ID:       "item-without-price",
+				Game:     "eve",
+				Source:   "esi",
+				Name:     "Warp Scrambler",
+				ImageURL: "https://cdn.example.com/scram.png",
+				IsActive: true,
+			},
+		},
+		historyByItemID: map[string]*catalog.PriceHistoryResponse{
+			"item-with-price": {
+				ItemID: "item-with-price",
+				History: []catalog.PriceHistoryEntry{{
+					ItemID:      "item-with-price",
+					Source:      "esi",
+					Value:       5500000,
+					Currency:    "ISK",
+					CollectedOn: "2026-05-11",
+					CollectedAt: now,
+				}},
+			},
+			"item-without-price": nil,
+		},
+	}
+
+	notificationClient := &stubPriceAlertNotification{}
+	svc := NewPriceAlertService(
+		zerolog.Nop(),
+		repo,
+		catalogClient,
+		stubPriceAlertAuth{
+			contact: &authclient.UserContact{
+				UserID:        7,
+				Email:         "user@example.com",
+				EmailVerified: true,
+			},
+		},
+		notificationClient,
+	)
+
+	result, err := svc.SendManualPriceAlerts(context.Background(), 7, true, now)
+	if err != nil {
+		t.Fatalf("SendManualPriceAlerts: %v", err)
+	}
+
+	if result.Mode != "snapshot" || result.EmailsSent != 1 || result.ChangesFound != 2 {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+	if len(notificationClient.requests) != 1 {
+		t.Fatalf("notification requests = %d, want 1", len(notificationClient.requests))
+	}
+	if !strings.Contains(notificationClient.requests[0].TextBody, "Warp Scrambler [EVE]: price unavailable on price unavailable") {
+		t.Fatalf("text body does not include unavailable price line: %s", notificationClient.requests[0].TextBody)
+	}
+	if !strings.Contains(notificationClient.requests[0].HTMLBody, "price unavailable") {
+		t.Fatalf("html body does not include unavailable price marker: %s", notificationClient.requests[0].HTMLBody)
 	}
 }
