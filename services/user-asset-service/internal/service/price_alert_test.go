@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog"
 	authclient "gtrade/services/user-asset-service/internal/client/auth"
 	"gtrade/services/user-asset-service/internal/client/catalog"
+	integrationclient "gtrade/services/user-asset-service/internal/client/integration"
 	notificationclient "gtrade/services/user-asset-service/internal/client/notification"
 	"gtrade/services/user-asset-service/internal/repository"
 )
@@ -69,6 +70,17 @@ func (s stubPriceAlertCatalog) GetPriceHistory(ctx context.Context, id, gameMode
 type stubPriceAlertAuth struct {
 	contact  *authclient.UserContact
 	contacts []authclient.UserContact
+}
+
+type stubPriceAlertIntegration struct {
+	priceByExternalID map[string]*integrationclient.TopPrice
+}
+
+func (s stubPriceAlertIntegration) GetTopPrice(ctx context.Context, externalID, game, gameMode string) (*integrationclient.TopPrice, error) {
+	if s.priceByExternalID != nil {
+		return s.priceByExternalID[externalID], nil
+	}
+	return nil, nil
 }
 
 func (s stubPriceAlertAuth) GetUserContact(ctx context.Context, userID int64) (*authclient.UserContact, error) {
@@ -186,6 +198,7 @@ func TestPriceAlertService_RunCycleImmediateSendsEmailAndAdvancesState(t *testin
 		zerolog.Nop(),
 		repo,
 		catalogClient,
+		stubPriceAlertIntegration{},
 		stubPriceAlertAuth{
 			contact: &authclient.UserContact{
 				UserID:        7,
@@ -225,6 +238,7 @@ func TestPriceAlertService_SendAdminMessageToAllVerifiedUsers(t *testing.T) {
 		zerolog.Nop(),
 		&stubPriceAlertRepo{},
 		stubPriceAlertCatalog{},
+		stubPriceAlertIntegration{},
 		stubPriceAlertAuth{
 			contacts: []authclient.UserContact{
 				{UserID: 1, Email: "one@example.com", EmailVerified: true},
@@ -271,20 +285,22 @@ func TestPriceAlertService_SendManualPriceAlertsForceSendIncludesItemsWithoutPri
 	catalogClient := stubPriceAlertCatalog{
 		itemsByID: map[string]*catalog.Item{
 			"item-with-price": {
-				ID:       "item-with-price",
-				Game:     "eve",
-				Source:   "esi",
-				Name:     "Plex",
-				ImageURL: "https://cdn.example.com/plex.png",
-				IsActive: true,
+				ID:         "item-with-price",
+				Game:       "eve",
+				Source:     "esi",
+				ExternalID: "plex-external",
+				Name:       "Plex",
+				ImageURL:   "https://cdn.example.com/plex.png",
+				IsActive:   true,
 			},
 			"item-without-price": {
-				ID:       "item-without-price",
-				Game:     "eve",
-				Source:   "esi",
-				Name:     "Warp Scrambler",
-				ImageURL: "https://cdn.example.com/scram.png",
-				IsActive: true,
+				ID:         "item-without-price",
+				Game:       "eve",
+				Source:     "esi",
+				ExternalID: "scram-external",
+				Name:       "Warp Scrambler",
+				ImageURL:   "https://cdn.example.com/scram.png",
+				IsActive:   true,
 			},
 		},
 		historyByItemID: map[string]*catalog.PriceHistoryResponse{
@@ -302,12 +318,25 @@ func TestPriceAlertService_SendManualPriceAlertsForceSendIncludesItemsWithoutPri
 			"item-without-price": nil,
 		},
 	}
+	integrationClient := stubPriceAlertIntegration{
+		priceByExternalID: map[string]*integrationclient.TopPrice{
+			"scram-external": {
+				ItemID:    "scram-external",
+				Game:      "eve",
+				Source:    "esi",
+				Currency:  "ISK",
+				Value:     float64Ptr(2750000),
+				FetchedAt: now,
+			},
+		},
+	}
 
 	notificationClient := &stubPriceAlertNotification{}
 	svc := NewPriceAlertService(
 		zerolog.Nop(),
 		repo,
 		catalogClient,
+		integrationClient,
 		stubPriceAlertAuth{
 			contact: &authclient.UserContact{
 				UserID:        7,
@@ -329,10 +358,10 @@ func TestPriceAlertService_SendManualPriceAlertsForceSendIncludesItemsWithoutPri
 	if len(notificationClient.requests) != 1 {
 		t.Fatalf("notification requests = %d, want 1", len(notificationClient.requests))
 	}
-	if !strings.Contains(notificationClient.requests[0].TextBody, "Warp Scrambler [EVE]: price unavailable on price unavailable") {
-		t.Fatalf("text body does not include unavailable price line: %s", notificationClient.requests[0].TextBody)
+	if !strings.Contains(notificationClient.requests[0].TextBody, "Warp Scrambler [EVE]: 2750000.00 ISK on 2026-05-11") {
+		t.Fatalf("text body does not include live price line: %s", notificationClient.requests[0].TextBody)
 	}
-	if !strings.Contains(notificationClient.requests[0].HTMLBody, "price unavailable") {
-		t.Fatalf("html body does not include unavailable price marker: %s", notificationClient.requests[0].HTMLBody)
+	if strings.Contains(notificationClient.requests[0].HTMLBody, "price unavailable") {
+		t.Fatalf("html body should not include unavailable marker when live price exists: %s", notificationClient.requests[0].HTMLBody)
 	}
 }

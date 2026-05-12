@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog"
 	authclient "gtrade/services/user-asset-service/internal/client/auth"
 	"gtrade/services/user-asset-service/internal/client/catalog"
+	integrationclient "gtrade/services/user-asset-service/internal/client/integration"
 	notificationclient "gtrade/services/user-asset-service/internal/client/notification"
 	"gtrade/services/user-asset-service/internal/config"
 	"gtrade/services/user-asset-service/internal/handler"
@@ -40,8 +41,9 @@ func Run(ctx context.Context) error {
 	catalogClient := catalog.New(cfg.CatalogURL)
 	userAssetService := service.NewUserAssetService(repo, catalogClient)
 	authClient := authclient.New(cfg.AuthServiceURL, cfg.InternalAPIToken)
+	integrationClient := integrationclient.New(cfg.IntegrationServiceURL)
 	notificationClient := notificationclient.New(cfg.NotificationServiceURL)
-	priceAlertService := service.NewPriceAlertService(logger, repo, catalogClient, authClient, notificationClient)
+	priceAlertService := service.NewPriceAlertService(logger, repo, catalogClient, integrationClient, authClient, notificationClient)
 
 	alertInterval, err := time.ParseDuration(cfg.PriceAlertCheckInterval)
 	if err != nil {

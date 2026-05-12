@@ -14,13 +14,14 @@ import (
 var ErrNotFound = errors.New("catalog item not found")
 
 type Item struct {
-	ID       string `json:"id"`
-	Game     string `json:"game"`
-	Source   string `json:"source"`
-	Name     string `json:"name"`
-	Slug     string `json:"slug"`
-	ImageURL string `json:"image_url"`
-	IsActive bool   `json:"is_active"`
+	ID         string `json:"id"`
+	Game       string `json:"game"`
+	Source     string `json:"source"`
+	ExternalID string `json:"external_id"`
+	Name       string `json:"name"`
+	Slug       string `json:"slug"`
+	ImageURL   string `json:"image_url"`
+	IsActive   bool   `json:"is_active"`
 }
 
 type PriceHistoryEntry struct {

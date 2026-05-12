@@ -11,6 +11,7 @@ type Config struct {
 	Port                    int
 	DatabaseURL             string
 	CatalogURL              string
+	IntegrationServiceURL   string
 	AuthServiceURL          string
 	NotificationServiceURL  string
 	InternalAPIToken        string
@@ -31,6 +32,7 @@ func Load() (Config, error) {
 		Port:                    port,
 		DatabaseURL:             os.Getenv("DATABASE_URL"),
 		CatalogURL:              getEnv("CATALOG_SERVICE_URL", "http://localhost:8084"),
+		IntegrationServiceURL:   getEnv("INTEGRATION_SERVICE_URL", "http://localhost:8083"),
 		AuthServiceURL:          getEnv("AUTH_SERVICE_URL", "http://localhost:8081"),
 		NotificationServiceURL:  getEnv("NOTIFICATION_SERVICE_URL", "http://localhost:8085"),
 		InternalAPIToken:        os.Getenv("INTERNAL_API_TOKEN"),

@@ -13,6 +13,7 @@ import (
 	"github.com/rs/zerolog"
 	authclient "gtrade/services/user-asset-service/internal/client/auth"
 	"gtrade/services/user-asset-service/internal/client/catalog"
+	integrationclient "gtrade/services/user-asset-service/internal/client/integration"
 	notificationclient "gtrade/services/user-asset-service/internal/client/notification"
 	"gtrade/services/user-asset-service/internal/repository"
 )
@@ -28,6 +29,10 @@ type priceAlertRepository interface {
 type catalogPriceClient interface {
 	GetItem(ctx context.Context, id string) (*catalog.Item, error)
 	GetPriceHistory(ctx context.Context, id, gameMode string, limit int) (*catalog.PriceHistoryResponse, error)
+}
+
+type integrationPriceClient interface {
+	GetTopPrice(ctx context.Context, externalID, game, gameMode string) (*integrationclient.TopPrice, error)
 }
 
 type authContactClient interface {
@@ -80,15 +85,17 @@ type AdminMessageResult struct {
 type PriceAlertService struct {
 	repo         priceAlertRepository
 	catalog      catalogPriceClient
+	integration  integrationPriceClient
 	auth         authContactClient
 	notification notificationEmailClient
 	logger       zerolog.Logger
 }
 
-func NewPriceAlertService(logger zerolog.Logger, repo priceAlertRepository, catalogClient catalogPriceClient, authClient authContactClient, notificationClient notificationEmailClient) *PriceAlertService {
+func NewPriceAlertService(logger zerolog.Logger, repo priceAlertRepository, catalogClient catalogPriceClient, integrationClient integrationPriceClient, authClient authContactClient, notificationClient notificationEmailClient) *PriceAlertService {
 	return &PriceAlertService{
 		repo:         repo,
 		catalog:      catalogClient,
+		integration:  integrationClient,
 		auth:         authClient,
 		notification: notificationClient,
 		logger:       logger.With().Str("component", "price_alert").Logger(),
@@ -390,7 +397,7 @@ func (s *PriceAlertService) sendForcedSnapshot(ctx context.Context, userID int64
 			s.logger.Info().
 				Int64("user_id", sub.UserID).
 				Str("item_id", sub.ItemID).
-				Msg("force_send: including subscription without price history")
+				Msg("force_send: resolving live price from integration")
 
 			change := PriceAlertChange{
 				ItemID:      item.ID,
@@ -400,6 +407,25 @@ func (s *PriceAlertService) sendForcedSnapshot(ctx context.Context, userID int64
 				Source:      item.Source,
 				Currency:    sub.Currency,
 				CollectedOn: "price unavailable",
+			}
+
+			livePrice, liveErr := s.resolveLiveSnapshotPrice(ctx, item)
+			if liveErr != nil {
+				s.logger.Info().
+					Int64("user_id", sub.UserID).
+					Str("item_id", sub.ItemID).
+					Err(liveErr).
+					Msg("force_send: live price unavailable, keeping fallback marker")
+			} else if livePrice != nil {
+				change.Source = livePrice.Source
+				change.GameMode = livePrice.GameMode
+				change.Currency = livePrice.Currency
+				change.CurrentValue = valueOrZero(livePrice.Value)
+				change.PreviousValue = valueOrZero(livePrice.Value)
+				if !livePrice.FetchedAt.IsZero() {
+					change.CollectedAt = livePrice.FetchedAt
+					change.CollectedOn = livePrice.FetchedAt.UTC().Format("2006-01-02")
+				}
 			}
 
 			pending := pendingByUser[sub.UserID]
@@ -918,6 +944,24 @@ func formatDelta(value float64, currency string) string {
 	return fmt.Sprintf("%s%.2f %s", prefix, value, strings.ToUpper(strings.TrimSpace(currency)))
 }
 
+func (s *PriceAlertService) resolveLiveSnapshotPrice(ctx context.Context, item *catalog.Item) (*integrationclient.TopPrice, error) {
+	if s == nil || s.integration == nil || item == nil {
+		return nil, nil
+	}
+	if strings.TrimSpace(item.ExternalID) == "" || strings.TrimSpace(item.Game) == "" {
+		return nil, nil
+	}
+
+	price, err := s.integration.GetTopPrice(ctx, item.ExternalID, item.Game, "")
+	if err != nil {
+		return nil, err
+	}
+	if price == nil || price.Value == nil {
+		return nil, nil
+	}
+	return price, nil
+}
+
 func formatSnapshotPrice(change PriceAlertChange) string {
 	if strings.TrimSpace(change.CollectedOn) == "" || strings.EqualFold(strings.TrimSpace(change.CollectedOn), "price unavailable") {
 		return "price unavailable"
@@ -930,6 +974,13 @@ func formatSnapshotCollectedOn(change PriceAlertChange) string {
 		return "price unavailable"
 	}
 	return change.CollectedOn
+}
+
+func valueOrZero(v *float64) float64 {
+	if v == nil {
+		return 0
+	}
+	return *v
 }
 
 const priceAlertEmailTemplate = `
